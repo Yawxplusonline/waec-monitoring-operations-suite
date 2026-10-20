@@ -1,0 +1,21 @@
+{
+  "name": "waec-sentinel-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WAEC Sentinel: Real-Time Field Monitoring & Emergency Response System ($0 Operational Cost Architecture)",
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "preview": "npm --prefix web run preview"
+  },
+  "keywords": [
+    "WAEC",
+    "Sentinel",
+    "Field-Monitoring",
+    "Leaflet",
+    "Firebase-RTDB",
+    "Flutter",
+    "Geofencing"
+  ],
+  "author": "WAEC Operations & Security Engineering"
+}

@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 15-second Ambient SOS Audio Clips (Max 2MB per clip to preserve 5GB Spark Free Tier)
+    match /sos_audio/{officerId}/{alertId}.webm {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == officerId
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType.matches('audio/.*');
+    }
+
+    // Watermarked Incident Evidence Photos (Compressed JPEG/WebP < 800KB)
+    match /incidents/{officerId}/{incidentId}.jpg {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == officerId
+                   && request.resource.size < 800 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

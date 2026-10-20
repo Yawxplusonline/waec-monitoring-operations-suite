@@ -1,0 +1,62 @@
+{
+  "rules": {
+    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+    "officers": {
+      "$officer_id": {
+        ".read": "auth != null && (auth.uid === $officer_id || root.child('admins').child(auth.uid).exists())",
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+        "status": {
+          ".write": "auth != null && auth.uid === $officer_id && root.child('officers').child($officer_id).child('whitelisted').val() === true && root.child('officers').child($officer_id).child('locked_out').val() !== true && (newData.val() === 'ONLINE' || newData.val() === 'OFFLINE' || newData.val() === 'SOS')"
+        },
+        "last_heartbeat": {
+          ".write": "auth != null && auth.uid === $officer_id && newData.isNumber()"
+        },
+        "device_integrity": {
+          ".write": "auth != null && auth.uid === $officer_id && (!data.child('bound_device_id').exists() || data.child('bound_device_id').val() === newData.child('bound_device_id').val())"
+        }
+      }
+    },
+    "live_locations": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$officer_id": {
+        ".read": "auth != null && auth.uid === $officer_id",
+        ".write": "auth != null && auth.uid === $officer_id && root.child('officers').child($officer_id).child('whitelisted').val() === true && root.child('officers').child($officer_id).child('locked_out').val() !== true && root.child('officers').child($officer_id).child('device_integrity').child('is_rooted').val() === false && root.child('officers').child($officer_id).child('device_integrity').child('is_mock_location').val() === false",
+        ".validate": "newData.hasChildren(['lat', 'lng', 'speed', 'battery', 'transit_mode', 'updated_at']) && newData.child('lat').isNumber() && newData.child('lat').val() >= -90 && newData.child('lat').val() <= 90 && newData.child('lng').isNumber() && newData.child('lng').val() >= -180 && newData.child('lng').val() <= 180 && newData.child('battery').isNumber() && newData.child('battery').val() >= 0 && newData.child('battery').val() <= 100"
+      }
+    },
+    "alerts": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$alert_id": {
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || (!data.exists() && newData.child('officer_id').val() === auth.uid))",
+        ".validate": "newData.hasChildren(['officer_id', 'lat', 'lng', 'type', 'status', 'timestamp'])"
+      }
+    },
+    "auth_audit_logs": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$audit_id": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "newData.hasChildren(['officer_id', 'phone', 'event_type', 'device_id', 'timestamp'])"
+      }
+    },
+    "centers": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+    "routes": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+    "geofence_logs": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$log_id": {
+        ".write": "auth != null && !data.exists() && newData.child('officer_id').val() === auth.uid"
+      }
+    },
+    "incidents": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$incident_id": {
+        ".write": "auth != null && (!data.exists() && newData.child('officer_id').val() === auth.uid || root.child('admins').child(auth.uid).exists())"
+      }
+    }
+  }
+}

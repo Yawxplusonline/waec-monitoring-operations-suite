@@ -1,0 +1,40 @@
+name: waec_sentinel_mobile
+description: WAEC Sentinel Field Officer Mobile Application ($0 Cost Architecture - Flutter Background GPS, Anti-Spoofing & Silent SOS)
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Persistent Foreground/Background Service for Uninterrupted GPS Streaming
+  flutter_background_service: ^5.0.5
+  flutter_background_service_android: ^6.2.2
+  # Hardware GPS & Battery Telemetry
+  geolocator: ^11.0.0
+  battery_plus: ^6.0.1
+  # Module A: Anti-Spoofing, Root/Jailbreak & Mock GPS Detection
+  safe_device: ^1.1.9
+  # Module B & E: Firebase Spark Free Tier RTDB & Cloud Storage
+  firebase_core: ^2.30.0
+  firebase_database: ^10.5.4
+  firebase_storage: ^11.7.4
+  # Module D: Client-side 100m Geofencing & Distance Math
+  latlong2: ^0.9.1
+  # Module E: Hive NoSQL Offline Local Resilience Buffer
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  # Module C & E: Camera Evidence Capture & 15s Ambient SOS Audio Recording
+  image_picker: ^1.1.1
+  record: ^5.0.5
+  crypto: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Production builds
+dist/
+web/dist/
+mobile_flutter/build/
+mobile_flutter/.dart_tool/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+web/.env
+web/.env.local
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
+.vercel/

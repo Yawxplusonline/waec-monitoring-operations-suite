@@ -1,0 +1,245 @@
+{
+  "officers": {
+    "officer_001": {
+      "id": "officer_001",
+      "name": "Kwame Mensah",
+      "role": "Field Monitoring Officer",
+      "phone": "+233200000001",
+      "pin_demo": "1234",
+      "pin_hash": "81dc9bdb52d04dc20036dbd8313ed055",
+      "assigned_zone": "Accra Central & Achimota",
+      "assigned_center_id": "center_GH_042",
+      "assigned_route_id": "route_ACC_01",
+      "whitelisted": true,
+      "on_shift": true,
+      "status": "ONLINE",
+      "device_integrity": {
+        "is_rooted": false,
+        "is_mock_location": false,
+        "developer_mode": false,
+        "device_model": "Samsung Galaxy A54 5G",
+        "verified_at": 1792388800000
+      }
+    },
+    "officer_002": {
+      "id": "officer_002",
+      "name": "Ama Osei-Bonsu",
+      "role": "Paper Escort Lead",
+      "phone": "+233240000002",
+      "pin_demo": "2468",
+      "pin_hash": "e99a18c428cb38d5f260853678922e03",
+      "assigned_zone": "Legon & Madina Axis",
+      "assigned_center_id": "center_GH_015",
+      "assigned_route_id": "route_ACC_02",
+      "whitelisted": true,
+      "on_shift": true,
+      "status": "ONLINE",
+      "device_integrity": {
+        "is_rooted": false,
+        "is_mock_location": false,
+        "developer_mode": false,
+        "device_model": "Google Pixel 7a",
+        "verified_at": 1792388800000
+      }
+    },
+    "officer_003": {
+      "id": "officer_003",
+      "name": "Kofi Boateng",
+      "role": "Field Monitoring Officer",
+      "phone": "+233500000003",
+      "pin_demo": "1111",
+      "pin_hash": "b59c67bf196a4758191e42f76670ceba",
+      "assigned_zone": "Osu & Labone Corridor",
+      "assigned_center_id": "center_GH_088",
+      "assigned_route_id": "route_ACC_03",
+      "whitelisted": true,
+      "on_shift": true,
+      "status": "ONLINE",
+      "device_integrity": {
+        "is_rooted": false,
+        "is_mock_location": false,
+        "developer_mode": false,
+        "device_model": "iPhone 14",
+        "verified_at": 1792388800000
+      }
+    },
+    "officer_004": {
+      "id": "officer_004",
+      "name": "Esi Ansah",
+      "role": "Depot / Escort Supervisor",
+      "phone": "+233270000004",
+      "pin_demo": "9999",
+      "pin_hash": "fa246d0262c3925617b0c72bb20eeb1d",
+      "assigned_zone": "Dansoman & Mamprobi",
+      "assigned_center_id": "center_GH_104",
+      "assigned_route_id": "route_ACC_01",
+      "whitelisted": true,
+      "on_shift": false,
+      "status": "OFFLINE",
+      "device_integrity": {
+        "is_rooted": false,
+        "is_mock_location": false,
+        "developer_mode": false,
+        "device_model": "Xiaomi Redmi Note 12",
+        "verified_at": 1792385200000
+      }
+    }
+  },
+  "live_locations": {
+    "officer_001": {
+      "lat": 5.6212,
+      "lng": -0.2223,
+      "heading": 45,
+      "speed": 14.2,
+      "battery": 88,
+      "transit_mode": true,
+      "is_mock": false,
+      "updated_at": 1792388800000
+    },
+    "officer_002": {
+      "lat": 5.6585,
+      "lng": -0.1815,
+      "heading": 120,
+      "speed": 36.8,
+      "battery": 74,
+      "transit_mode": true,
+      "is_mock": false,
+      "updated_at": 1792388800000
+    },
+    "officer_003": {
+      "lat": 5.5662,
+      "lng": -0.1752,
+      "heading": 180,
+      "speed": 1.2,
+      "battery": 92,
+      "transit_mode": false,
+      "is_mock": false,
+      "updated_at": 1792388800000
+    },
+    "officer_004": {
+      "lat": 5.5395,
+      "lng": -0.2641,
+      "heading": 0,
+      "speed": 0,
+      "battery": 41,
+      "transit_mode": false,
+      "is_mock": false,
+      "updated_at": 1792385200000
+    }
+  },
+  "centers": {
+    "center_GH_042": {
+      "id": "center_GH_042",
+      "code": "GH-042",
+      "name": "Achimota Senior High School",
+      "zone": "Accra North",
+      "lat": 5.6212,
+      "lng": -0.2223,
+      "radius_meters": 100,
+      "candidates_count": 480,
+      "paper_code": "WASSCE-302-CORE-MATH"
+    },
+    "center_GH_015": {
+      "id": "center_GH_015",
+      "code": "GH-015",
+      "name": "Presec Legon Examination Hall",
+      "zone": "Legon / Madina",
+      "lat": 5.6629,
+      "lng": -0.1764,
+      "radius_meters": 100,
+      "candidates_count": 620,
+      "paper_code": "WASSCE-302-CORE-MATH"
+    },
+    "center_GH_088": {
+      "id": "center_GH_088",
+      "code": "GH-088",
+      "name": "Accra Academy Senior High",
+      "zone": "Kaneshie / Bubuashie",
+      "lat": 5.5754,
+      "lng": -0.2442,
+      "radius_meters": 100,
+      "candidates_count": 510,
+      "paper_code": "WASSCE-302-CORE-MATH"
+    },
+    "center_GH_104": {
+      "id": "center_GH_104",
+      "code": "GH-104",
+      "name": "Labone Senior High School",
+      "zone": "Osu / Labone",
+      "lat": 5.5662,
+      "lng": -0.1752,
+      "radius_meters": 100,
+      "candidates_count": 395,
+      "paper_code": "WASSCE-302-CORE-MATH"
+    },
+    "depot_HQ_01": {
+      "id": "depot_HQ_01",
+      "code": "DEPOT-ACC-HQ",
+      "name": "WAEC Strongroom Depot (Ridge HQ)",
+      "zone": "Accra Ridge",
+      "lat": 5.5645,
+      "lng": -0.1963,
+      "radius_meters": 120,
+      "candidates_count": 0,
+      "paper_code": "CENTRAL-VAULT"
+    }
+  },
+  "routes": {
+    "route_ACC_01": {
+      "id": "route_ACC_01",
+      "name": "Ridge Vault → Achimota SHS Escort Corridor",
+      "origin_id": "depot_HQ_01",
+      "destination_id": "center_GH_042",
+      "assigned_officer_id": "officer_001",
+      "max_deviation_meters": 200,
+      "max_stop_seconds": 180,
+      "waypoints": [
+        [5.5645, -0.1963],
+        [5.5758, -0.2051],
+        [5.5912, -0.2124],
+        [5.6068, -0.2189],
+        [5.6212, -0.2223]
+      ]
+    },
+    "route_ACC_02": {
+      "id": "route_ACC_02",
+      "name": "Ridge Vault → Presec Legon Escort Corridor",
+      "origin_id": "depot_HQ_01",
+      "destination_id": "center_GH_015",
+      "assigned_officer_id": "officer_002",
+      "max_deviation_meters": 200,
+      "max_stop_seconds": 180,
+      "waypoints": [
+        [5.5645, -0.1963],
+        [5.5880, -0.1845],
+        [5.6140, -0.1780],
+        [5.6410, -0.1795],
+        [5.6629, -0.1764]
+      ]
+    }
+  },
+  "alerts": {},
+  "geofence_logs": {
+    "log_init_1": {
+      "id": "log_init_1",
+      "officer_id": "officer_003",
+      "officer_name": "Kofi Boateng",
+      "center_id": "center_GH_104",
+      "center_name": "Labone Senior High School",
+      "event_type": "ENTER_CENTER",
+      "distance_meters": 18,
+      "timestamp": 1792388600000
+    },
+    "log_init_2": {
+      "id": "log_init_2",
+      "officer_id": "officer_001",
+      "officer_name": "Kwame Mensah",
+      "center_id": "center_GH_042",
+      "center_name": "Achimota Senior High School",
+      "event_type": "ENTER_CENTER",
+      "distance_meters": 12,
+      "timestamp": 1792388750000
+    }
+  },
+  "incidents": {}
+}
