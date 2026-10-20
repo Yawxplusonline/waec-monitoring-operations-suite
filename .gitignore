@@ -2,6 +2,12 @@
 node_modules/
 web/node_modules/
 
+# Lockfiles (avoid Windows-to-Linux Rollup native binary mismatch on Vercel)
+package-lock.json
+web/package-lock.json
+*.tsbuildinfo
+web/*.tsbuildinfo
+
 # Production builds
 dist/
 web/dist/
