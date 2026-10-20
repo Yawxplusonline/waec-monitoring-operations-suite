@@ -210,9 +210,9 @@ export function App() {
   const [newOfficerPhone, setNewOfficerPhone] = useState<string>('+23324');
   const [newOfficerPin, setNewOfficerPin] = useState<string>('1234');
   const [newOfficerRole, setNewOfficerRole] = useState<UserRole>('Field Monitoring Officer');
-  const [newOfficerZone, setNewOfficerZone] = useState<string>('Accra Central & Achimota');
-  const [newOfficerCenterId, setNewOfficerCenterId] = useState<string>('center_GH_042');
-  const [newOfficerRouteId, setNewOfficerRouteId] = useState<string>('route_ACC_01');
+  const [newOfficerZone, setNewOfficerZone] = useState<string>('Greater Accra Region (Accra)');
+  const [newOfficerCenterId, setNewOfficerCenterId] = useState<string>('center_WAEC_ACC');
+  const [newOfficerRouteId, setNewOfficerRouteId] = useState<string>('route_ACC_KOF');
   const [provisionFeedback, setProvisionFeedback] = useState<string | null>(null);
 
   // Head of Department: Edit & Delete Field Monitor State
@@ -222,11 +222,14 @@ export function App() {
   const [editPin, setEditPin] = useState<string>('');
   const [editRole, setEditRole] = useState<UserRole>('Field Monitoring Officer');
   const [editZone, setEditZone] = useState<string>('');
-  const [editCenterId, setEditCenterId] = useState<string>('center_GH_042');
-  const [editRouteId, setEditRouteId] = useState<string>('route_ACC_01');
+  const [editCenterId, setEditCenterId] = useState<string>('center_WAEC_ACC');
+  const [editRouteId, setEditRouteId] = useState<string>('route_ACC_KOF');
   const [editBadgeNo, setEditBadgeNo] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [directoryFeedback, setDirectoryFeedback] = useState<string | null>(null);
+  const [mapFocusCoords, setMapFocusCoords] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
 
   useEffect(() => {
     const unsubscribe = sentinelSync.subscribe((newState) => {
@@ -1361,17 +1364,23 @@ export function App() {
           {headTab === 'COMMAND_MAP' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-                <div className="rounded-3xl overflow-hidden border-2 border-[#FFD700]/40 bg-[#071B3E] shadow-2xl h-[540px] relative">
+                <div className="rounded-3xl overflow-hidden border-2 border-[#FFD700]/40 bg-[#071B3E] shadow-2xl h-[500px] relative">
                   <MapContainer
-                    center={[focusedLocation.lat, focusedLocation.lng]}
-                    zoom={13}
+                    center={[
+                      mapFocusCoords ? mapFocusCoords.lat : focusedLocation.lat,
+                      mapFocusCoords ? mapFocusCoords.lng : focusedLocation.lng,
+                    ]}
+                    zoom={7}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
                       attribution="&copy; OpenStreetMap contributors"
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <MapRecenter lat={focusedLocation.lat} lng={focusedLocation.lng} />
+                    <MapRecenter
+                      lat={mapFocusCoords ? mapFocusCoords.lat : focusedLocation.lat}
+                      lng={mapFocusCoords ? mapFocusCoords.lng : focusedLocation.lng}
+                    />
 
                     {Object.values(dbState.centers).map((center) => (
                       <React.Fragment key={center.id}>
@@ -1381,20 +1390,25 @@ export function App() {
                           pathOptions={{
                             color: '#FFD700',
                             fillColor: '#002147',
-                            fillOpacity: 0.25,
+                            fillOpacity: 0.3,
                             weight: 2,
                           }}
                         />
                         <Marker position={[center.lat, center.lng]}>
                           <Popup>
-                            <div className="text-xs font-sans">
-                              <strong>
+                            <div className="text-xs font-sans space-y-1">
+                              <strong className="text-[#002147]">
                                 {center.code}: {center.name}
                               </strong>
-                              <br />
-                              Geofence Radius: {center.radius_meters}m
-                              <br />
-                              Candidates: {center.candidates_count}
+                              {center.wkt && (
+                                <div className="font-mono text-[10px] text-slate-600">
+                                  WKT: {center.wkt}
+                                </div>
+                              )}
+                              <div>
+                                Geofence Radius: {center.radius_meters}m | Candidates:{' '}
+                                {center.candidates_count}
+                              </div>
                             </div>
                           </Popup>
                         </Marker>
@@ -1479,6 +1493,82 @@ export function App() {
                     >
                       📡 Step Live Fleet GPS Tick
                     </button>
+                  </div>
+                </div>
+
+                {/* 10 WAEC GHANA WKT EXAMINATION CENTERS & MONITOR DEPLOYMENT HUB */}
+                <div className="p-5 rounded-3xl bg-[#071B3E] border border-[#FFD700]/40 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
+                        OFFICIAL WKT GEOSPATIAL REGISTRY (10 CENTERS)
+                      </span>
+                      <h3 className="font-display font-black text-base text-white flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#FFD700]" /> WAEC Examination Centers
+                        — Deploy Field Monitors
+                      </h3>
+                    </div>
+                    <span className="text-xs font-mono text-blue-200">
+                      Selected Monitor:{' '}
+                      <strong className="text-[#FFD700]">{focusedMonitor.name}</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+                    {Object.values(dbState.centers).map((ctr) => {
+                      const assignedCount = fieldMonitors.filter(
+                        (m) => m.assigned_center_id === ctr.id
+                      ).length;
+                      return (
+                        <div
+                          key={ctr.id}
+                          className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 hover:border-[#FFD700]/50 transition text-xs space-y-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-[#FFD700] text-[#002147]">
+                                {ctr.code}
+                              </span>
+                              <div className="font-display font-bold text-white mt-1">
+                                {ctr.name}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-mono text-emerald-400 shrink-0">
+                              {assignedCount} Monitor{assignedCount === 1 ? '' : 's'}
+                            </span>
+                          </div>
+
+                          <div className="font-mono text-[10px] text-blue-300 truncate">
+                            {ctr.wkt || `POINT (${ctr.lng} ${ctr.lat})`}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng })
+                              }
+                              className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer"
+                            >
+                              🔍 View on Map
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                sentinelSync.deployMonitorToExamCenter(
+                                  focusedMonitor.id,
+                                  ctr.id
+                                );
+                                setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng });
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer"
+                            >
+                              📍 Deploy {focusedMonitor.name.split(' ')[0]} Here
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1765,6 +1855,28 @@ export function App() {
                       <option value="Head of Monitoring Team">
                         Head of Monitoring Team (HOD)
                       </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">
+                      Deploy to WAEC Examination Center (10 Locations)
+                    </label>
+                    <select
+                      aria-label="Deploy to Examination Center"
+                      value={newOfficerCenterId}
+                      onChange={(e) => {
+                        const ctr = dbState.centers[e.target.value];
+                        setNewOfficerCenterId(e.target.value);
+                        if (ctr) setNewOfficerZone(ctr.zone);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-[#FFD700] font-bold"
+                    >
+                      {Object.values(dbState.centers).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.code} — {c.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -2421,6 +2533,12 @@ export function App() {
                   : assignedCenter?.name}
               </div>
 
+              {assignedCenter?.wkt && (
+                <div className="text-[11px] font-mono text-[#FFD700]">
+                  WKT: {assignedCenter.wkt}
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-blue-200">
                 <span>
                   Distance: <strong className="text-white">{geofenceStatus.nearestDistance}m</strong> (Radius: 100m)
@@ -2428,6 +2546,30 @@ export function App() {
                 <span>
                   Bearing: <strong className="text-[#FFD700]">{geofenceStatus.bearingToNearest}° N</strong>
                 </span>
+              </div>
+
+              {/* Deployed Examination Center Selector (All 10 WKT Locations) */}
+              <div className="pt-1">
+                <label className="block text-[10px] font-mono uppercase text-blue-300 mb-1">
+                  Deployed WAEC Examination Center (Switch / Check-In):
+                </label>
+                <select
+                  aria-label="Select Deployed WAEC Examination Center"
+                  value={currentOfficer.assigned_center_id}
+                  onChange={(e) =>
+                    sentinelSync.deployMonitorToExamCenter(
+                      currentOfficer.id,
+                      e.target.value
+                    )
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/50 text-white text-xs font-bold"
+                >
+                  {Object.values(dbState.centers).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} — {c.name} ({c.wkt})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">

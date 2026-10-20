@@ -134,6 +134,8 @@ export interface ExamCenter {
   code: string;
   name: string;
   zone: string;
+  wkt?: string;
+  description?: string;
   lat: number;
   lng: number;
   radius_meters: number;
