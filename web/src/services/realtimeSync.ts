@@ -22,8 +22,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v7';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v7';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v8';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v8';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -421,6 +421,30 @@ class RealtimeSyncEngine {
       this.state.live_locations[params.officerId] = { ...loc };
     }
     this.commitState();
+  }
+
+  public deployMonitorToExamCenter(officerId: string, centerId: string) {
+    const officer = this.state.officers[officerId];
+    const center = this.state.centers[centerId];
+    if (!officer || !center) return;
+
+    officer.assigned_center_id = center.id;
+    officer.assigned_zone = center.zone;
+    officer.on_shift = true;
+    officer.status = 'ONLINE';
+    officer.last_heartbeat = Date.now();
+    this.state.officers[officerId] = { ...officer };
+
+    this.updateOfficerLocation(
+      officerId,
+      {
+        lat: center.lat,
+        lng: center.lng,
+        speed: 1.4,
+        heading: 90,
+      },
+      true
+    );
   }
 
   /**
