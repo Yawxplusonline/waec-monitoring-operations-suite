@@ -10,6 +10,7 @@ import {
   AuthAuditLog,
   AuthAuditEventType,
   ExamCenter,
+  WaecOffice,
   EscortRoute,
   DailyWorkRecord,
 } from '../types/sentinel';
@@ -22,8 +23,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v8';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v8';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v9';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v9';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -77,7 +78,9 @@ class RealtimeSyncEngine {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as SentinelDatabaseSchema;
-        if (parsed && parsed.officers && parsed.centers) {
+        if (parsed && parsed.officers) {
+          parsed.waec_offices = parsed.waec_offices || INITIAL_SEED_DATA.waec_offices || {};
+          parsed.centers = parsed.centers || {};
           parsed.auth_audit_logs = parsed.auth_audit_logs || {};
           parsed.location_trails = parsed.location_trails || INITIAL_SEED_DATA.location_trails;
           parsed.telegram_dispatches = parsed.telegram_dispatches || {};
@@ -217,16 +220,19 @@ class RealtimeSyncEngine {
           const val = snapshot.val();
           if (val) {
             this.state = {
+              waec_offices:
+                val.waec_offices || this.state.waec_offices || INITIAL_SEED_DATA.waec_offices || {},
               officers: val.officers || this.state.officers,
               live_locations: val.live_locations || this.state.live_locations,
               location_trails: val.location_trails || this.state.location_trails || {},
               alerts: val.alerts || {},
               telegram_dispatches: val.telegram_dispatches || {},
-              centers: val.centers || this.state.centers,
+              centers: val.centers || this.state.centers || {},
               routes: val.routes || this.state.routes,
               geofence_logs: val.geofence_logs || {},
               incidents: val.incidents || {},
               auth_audit_logs: val.auth_audit_logs || {},
+              daily_work_records: val.daily_work_records || this.state.daily_work_records || {},
             };
             this.notifySubscribers(Math.max(12, Math.round(performance.now() - t0)));
           } else {
@@ -423,6 +429,17 @@ class RealtimeSyncEngine {
     this.commitState();
   }
 
+  public assignOfficerOffice(officerId: string, officeId: string) {
+    const officer = this.state.officers[officerId];
+    const office = this.state.waec_offices?.[officeId];
+    if (!officer || !office) return;
+
+    officer.assigned_office_id = office.id;
+    officer.assigned_zone = office.name;
+    this.state.officers[officerId] = { ...officer };
+    this.commitState();
+  }
+
   public deployMonitorToExamCenter(officerId: string, centerId: string) {
     const officer = this.state.officers[officerId];
     const center = this.state.centers[centerId];
@@ -445,6 +462,24 @@ class RealtimeSyncEngine {
       },
       true
     );
+  }
+
+  public deleteExamCenter(centerId: string) {
+    if (this.state.centers && this.state.centers[centerId]) {
+      delete this.state.centers[centerId];
+      for (const officer of Object.values(this.state.officers)) {
+        if (officer.assigned_center_id === centerId) {
+          officer.assigned_center_id = '';
+        }
+      }
+      this.commitState();
+    }
+  }
+
+  public addWaecOffice(office: WaecOffice) {
+    this.state.waec_offices = this.state.waec_offices || {};
+    this.state.waec_offices[office.id] = office;
+    this.commitState();
   }
 
   /**
@@ -870,6 +905,7 @@ class RealtimeSyncEngine {
     zone: string;
     centerId: string;
     routeId: string;
+    officeId?: string;
     staffBadgeNo?: string;
   }) {
     const officer = this.state.officers[params.officerId];
@@ -887,8 +923,9 @@ class RealtimeSyncEngine {
       pin_demo: cleanPin,
       pin_hash: newPinHash,
       role: params.role,
+      assigned_office_id: params.officeId !== undefined ? params.officeId : officer.assigned_office_id,
       assigned_zone: params.zone.trim() || officer.assigned_zone,
-      assigned_center_id: params.centerId || officer.assigned_center_id,
+      assigned_center_id: params.centerId !== undefined ? params.centerId : officer.assigned_center_id,
       assigned_route_id: params.routeId || officer.assigned_route_id,
       staff_badge_no: params.staffBadgeNo?.trim() || officer.staff_badge_no,
       locked_out: false,
@@ -1301,8 +1338,10 @@ class RealtimeSyncEngine {
     zone: string;
     centerId: string;
     routeId: string;
+    officeId?: string;
   }) {
     const id = `officer_00${Object.keys(this.state.officers).length + 1}`;
+    const office = params.officeId ? this.state.waec_offices?.[params.officeId] : undefined;
     const center = this.state.centers[params.centerId] || Object.values(this.state.centers)[0];
     const pinHash = computePinHash(params.phone, params.pin);
 
@@ -1322,8 +1361,9 @@ class RealtimeSyncEngine {
       pin_hash: pinHash,
       avatar_url: buildOfficialWaecAvatar(initials, '#002147', '#FFD700'),
       staff_badge_no: `WAEC-FM-${100 + Object.keys(this.state.officers).length}`,
-      assigned_zone: params.zone,
-      assigned_center_id: params.centerId,
+      assigned_office_id: params.officeId || 'office_WAEC_ACC',
+      assigned_zone: params.zone || office?.name || 'Greater Accra',
+      assigned_center_id: params.centerId || '',
       assigned_route_id: params.routeId,
       whitelisted: true,
       locked_out: false,
@@ -1518,6 +1558,7 @@ class RealtimeSyncEngine {
     ];
 
     const centerIds = Object.keys(this.state.centers);
+    const officeIds = Object.keys(this.state.waec_offices || {});
     const routeIds = Object.keys(this.state.routes);
     const currentCount = Object.keys(this.state.officers).length;
 
@@ -1529,16 +1570,21 @@ class RealtimeSyncEngine {
       const name = ghanaNames[(i - 1) % ghanaNames.length];
       const phone = `+23324${String(1000000 + i * 7919).slice(0, 7)}`;
       const pin = String(1000 + ((i * 317) % 8999));
-      const centerId = centerIds[i % centerIds.length] || 'center_GH_042';
+      const centerId = centerIds.length > 0 ? (centerIds[i % centerIds.length] || '') : '';
+      const officeId =
+        officeIds.length > 0 ? officeIds[i % officeIds.length] : 'office_WAEC_ACC';
+      const office = this.state.waec_offices?.[officeId];
       const routeId = routeIds[i % routeIds.length] || 'route_ACC_01';
-      const center = this.state.centers[centerId];
+      const center = centerId ? this.state.centers[centerId] : null;
       const isEscort = i % 3 === 0;
       const isMoving = i % 2 === 0;
 
       const latOffset = ((i % 7) - 3) * 0.0042 + (Math.random() - 0.5) * 0.002;
       const lngOffset = ((i % 5) - 2) * 0.0042 + (Math.random() - 0.5) * 0.002;
-      const startLat = Number(((center?.lat || 5.605) + latOffset).toFixed(6));
-      const startLng = Number(((center?.lng || -0.202) + lngOffset).toFixed(6));
+      const baseLat = center?.lat || office?.lat || 5.5647;
+      const baseLng = center?.lng || office?.lng || -0.1994;
+      const startLat = Number((baseLat + latOffset).toFixed(6));
+      const startLng = Number((baseLng + lngOffset).toFixed(6));
 
       this.state.officers[id] = {
         id,
@@ -1547,7 +1593,8 @@ class RealtimeSyncEngine {
         phone,
         pin_demo: pin,
         pin_hash: computePinHash(phone, pin),
-        assigned_zone: center?.zone || 'Greater Accra',
+        assigned_office_id: officeId,
+        assigned_zone: center?.zone || office?.name || 'Greater Accra',
         assigned_center_id: centerId,
         assigned_route_id: routeId,
         whitelisted: true,

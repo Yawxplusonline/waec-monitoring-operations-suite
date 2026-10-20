@@ -36,6 +36,7 @@ export interface OfficerProfile {
   pin_hash: string;
   avatar_url?: string;
   staff_badge_no?: string;
+  assigned_office_id?: string;
   assigned_zone: string;
   assigned_center_id: string;
   assigned_route_id: string;
@@ -129,6 +130,18 @@ export interface TelegramDispatchRecord {
   timestamp: number;
 }
 
+export interface WaecOffice {
+  id: string;
+  code: string;
+  name: string;
+  region: string;
+  wkt: string;
+  description: string;
+  lat: number;
+  lng: number;
+  is_head_office?: boolean;
+}
+
 export interface ExamCenter {
   id: string;
   code: string;
@@ -208,6 +221,7 @@ export interface AuthAuditLog {
 }
 
 export interface SentinelDatabaseSchema {
+  waec_offices?: Record<string, WaecOffice>;
   officers: Record<string, OfficerProfile>;
   live_locations: Record<string, LiveLocation>;
   location_trails?: Record<string, [number, number][]>;

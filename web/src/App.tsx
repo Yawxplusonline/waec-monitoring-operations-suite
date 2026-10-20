@@ -48,12 +48,16 @@ import {
   Trash2,
   X,
   Save,
+  Building2,
+  Plus,
 } from 'lucide-react';
 import {
   SentinelDatabaseSchema,
   IncidentEvidence,
   OfficerProfile,
   UserRole,
+  WaecOffice,
+  ExamCenter,
 } from './types/sentinel';
 import { sentinelSync } from './services/realtimeSync';
 import {
@@ -86,6 +90,26 @@ const officerPinIcon = L.divIcon({
   iconSize: [38, 38],
   iconAnchor: [19, 19],
 });
+
+function createOfficeMarkerIcon(office: WaecOffice) {
+  const isHead = Boolean(office.is_head_office);
+  return L.divIcon({
+    className: 'custom-office-marker',
+    html: `
+      <div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+        <span style="position:absolute;inset:-4px;border-radius:12px;background:${
+          isHead ? 'rgba(255,215,0,0.6)' : 'rgba(0,33,71,0.45)'
+        };animation:${isHead ? 'pulse 2s infinite' : 'none'};"></span>
+        <div style="width:32px;height:32px;border-radius:10px;background:#002147;border:2.5px solid #FFD700;box-shadow:0 4px 14px rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFD700;font-weight:900;font-size:8px;font-family:Outfit,sans-serif;line-height:1;">
+          <span style="font-size:11px;">🏛️</span>
+          <span style="letter-spacing:-0.5px;font-weight:900;">${isHead ? 'HQ' : 'WAEC'}</span>
+        </div>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  });
+}
 
 function createFleetMarkerIcon(officer: OfficerProfile, transitMode: boolean) {
   const isSos = officer.status === 'SOS';
@@ -210,8 +234,9 @@ export function App() {
   const [newOfficerPhone, setNewOfficerPhone] = useState<string>('+23324');
   const [newOfficerPin, setNewOfficerPin] = useState<string>('1234');
   const [newOfficerRole, setNewOfficerRole] = useState<UserRole>('Field Monitoring Officer');
-  const [newOfficerZone, setNewOfficerZone] = useState<string>('Greater Accra Region (Accra)');
-  const [newOfficerCenterId, setNewOfficerCenterId] = useState<string>('center_WAEC_ACC');
+  const [newOfficerOfficeId, setNewOfficerOfficeId] = useState<string>('office_WAEC_ACC');
+  const [newOfficerZone, setNewOfficerZone] = useState<string>('Accra — WAEC Head Office, Ghana');
+  const [newOfficerCenterId, setNewOfficerCenterId] = useState<string>('');
   const [newOfficerRouteId, setNewOfficerRouteId] = useState<string>('route_ACC_KOF');
   const [provisionFeedback, setProvisionFeedback] = useState<string | null>(null);
 
@@ -221,8 +246,9 @@ export function App() {
   const [editPhone, setEditPhone] = useState<string>('');
   const [editPin, setEditPin] = useState<string>('');
   const [editRole, setEditRole] = useState<UserRole>('Field Monitoring Officer');
+  const [editOfficeId, setEditOfficeId] = useState<string>('office_WAEC_ACC');
   const [editZone, setEditZone] = useState<string>('');
-  const [editCenterId, setEditCenterId] = useState<string>('center_WAEC_ACC');
+  const [editCenterId, setEditCenterId] = useState<string>('');
   const [editRouteId, setEditRouteId] = useState<string>('route_ACC_KOF');
   const [editBadgeNo, setEditBadgeNo] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -230,6 +256,18 @@ export function App() {
   const [mapFocusCoords, setMapFocusCoords] = useState<{ lat: number; lng: number } | null>(
     null
   );
+
+  // Examination Centers Creation Modal State
+  const [isAddCenterModalOpen, setIsAddCenterModalOpen] = useState<boolean>(false);
+  const [newCenterName, setNewCenterName] = useState<string>('');
+  const [newCenterCode, setNewCenterCode] = useState<string>('');
+  const [newCenterZone, setNewCenterZone] = useState<string>('Greater Accra');
+  const [newCenterLat, setNewCenterLat] = useState<number>(5.6037);
+  const [newCenterLng, setNewCenterLng] = useState<number>(-0.187);
+  const [newCenterRadius, setNewCenterRadius] = useState<number>(100);
+  const [newCenterCandidates, setNewCenterCandidates] = useState<number>(450);
+  const [newCenterPaper, setNewCenterPaper] = useState<string>('WASSCE-302-CORE-MATH');
+  const [centerModalFeedback, setCenterModalFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = sentinelSync.subscribe((newState) => {
@@ -605,6 +643,7 @@ export function App() {
       phone: newOfficerPhone.trim(),
       pin: newOfficerPin,
       role: newOfficerRole,
+      officeId: newOfficerOfficeId,
       zone: newOfficerZone,
       centerId: newOfficerCenterId,
       routeId: newOfficerRouteId,
@@ -622,6 +661,7 @@ export function App() {
     setEditPhone(officer.phone);
     setEditPin(officer.pin_demo);
     setEditRole(officer.role);
+    setEditOfficeId(officer.assigned_office_id || 'office_WAEC_ACC');
     setEditZone(officer.assigned_zone);
     setEditCenterId(officer.assigned_center_id);
     setEditRouteId(officer.assigned_route_id);
@@ -639,6 +679,7 @@ export function App() {
       phone: editPhone.trim(),
       pin: editPin,
       role: editRole,
+      officeId: editOfficeId,
       zone: editZone.trim(),
       centerId: editCenterId,
       routeId: editRouteId,
@@ -649,6 +690,30 @@ export function App() {
     );
     setEditingOfficerId(null);
     setTimeout(() => setDirectoryFeedback(null), 6000);
+  };
+
+  const handleCreateExamCenter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCenterName.trim() || !newCenterCode.trim()) return;
+    const added = sentinelSync.registerExamCenter({
+      code: newCenterCode.trim().toUpperCase(),
+      name: newCenterName.trim(),
+      zone: newCenterZone.trim(),
+      lat: Number(newCenterLat),
+      lng: Number(newCenterLng),
+      radiusMeters: Number(newCenterRadius) || 100,
+      candidatesCount: Number(newCenterCandidates) || 400,
+      paperCode: newCenterPaper.trim() || 'WASSCE-302-CORE-MATH',
+    });
+    setCenterModalFeedback(
+      `✅ Registered Examination Center: ${added.name} [${added.code}] with 100m geofence!`
+    );
+    setNewCenterName('');
+    setNewCenterCode('');
+    setTimeout(() => {
+      setCenterModalFeedback(null);
+      setIsAddCenterModalOpen(false);
+    }, 2500);
   };
 
   const handleDeleteOfficer = (officer: OfficerProfile) => {
@@ -1382,6 +1447,41 @@ export function App() {
                       lng={mapFocusCoords ? mapFocusCoords.lng : focusedLocation.lng}
                     />
 
+                    {/* 10 OFFICIAL WAEC REGIONAL OFFICES & HEAD OFFICE MARKERS */}
+                    {dbState.waec_offices &&
+                      Object.values(dbState.waec_offices).map((office) => (
+                        <Marker
+                          key={office.id}
+                          position={[office.lat, office.lng]}
+                          icon={createOfficeMarkerIcon(office)}
+                        >
+                          <Popup>
+                            <div className="text-xs font-sans space-y-1.5 min-w-[220px]">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded bg-[#FFD700] text-[#002147] font-extrabold text-[10px]">
+                                  {office.is_head_office ? 'WAEC HEAD OFFICE (GHANA)' : 'WAEC REGIONAL OFFICE'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono font-bold">
+                                  {office.code}
+                                </span>
+                              </div>
+                              <strong className="text-[#002147] block text-sm font-display font-extrabold">
+                                {office.name}
+                              </strong>
+                              <div className="text-slate-600 text-[11px]">{office.description}</div>
+                              <div className="font-mono text-[10px] text-blue-900 bg-blue-50 p-1.5 rounded border border-blue-200 break-all">
+                                WKT: {office.wkt}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                Region: <strong>{office.region}</strong> | Coords: {office.lat.toFixed(6)},{' '}
+                                {office.lng.toFixed(6)}
+                              </div>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      ))}
+
+                    {/* EXAMINATION CENTERS WITH 100M CIRCULAR GEOFENCES (KEPT SEPARATE) */}
                     {Object.values(dbState.centers).map((center) => (
                       <React.Fragment key={center.id}>
                         <Circle
@@ -1397,7 +1497,10 @@ export function App() {
                         <Marker position={[center.lat, center.lng]}>
                           <Popup>
                             <div className="text-xs font-sans space-y-1">
-                              <strong className="text-[#002147]">
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-800 font-bold text-[10px]">
+                                EXAM CENTER
+                              </span>
+                              <strong className="text-[#002147] block">
                                 {center.code}: {center.name}
                               </strong>
                               {center.wkt && (
@@ -1496,17 +1599,19 @@ export function App() {
                   </div>
                 </div>
 
-                {/* 10 WAEC GHANA WKT EXAMINATION CENTERS & MONITOR DEPLOYMENT HUB */}
-                <div className="p-5 rounded-3xl bg-[#071B3E] border border-[#FFD700]/40 space-y-3">
+                {/* 10 OFFICIAL WAEC REGIONAL OFFICES & DEPOTS NETWORK */}
+                <div className="p-5 rounded-3xl bg-[#071B3E] border border-[#FFD700]/40 space-y-3 shadow-xl">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
-                        OFFICIAL WKT GEOSPATIAL REGISTRY (10 CENTERS)
+                        OFFICIAL WAEC REGIONAL OFFICES &amp; DEPOTS (10 WKT GEOLOCATIONS)
                       </span>
                       <h3 className="font-display font-black text-base text-white flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-[#FFD700]" /> WAEC Examination Centers
-                        — Deploy Field Monitors
+                        <Building2 className="w-4 h-4 text-[#FFD700]" /> WAEC Regional Branch Offices &amp; Depots
                       </h3>
+                      <p className="text-[11px] text-blue-200">
+                        Official administrative offices and depot centers across Ghana&apos;s regions (kept strictly separate from exam centers).
+                      </p>
                     </div>
                     <span className="text-xs font-mono text-blue-200">
                       Selected Monitor:{' '}
@@ -1514,62 +1619,173 @@ export function App() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
-                    {Object.values(dbState.centers).map((ctr) => {
-                      const assignedCount = fieldMonitors.filter(
-                        (m) => m.assigned_center_id === ctr.id
-                      ).length;
-                      return (
-                        <div
-                          key={ctr.id}
-                          className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 hover:border-[#FFD700]/50 transition text-xs space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-[#FFD700] text-[#002147]">
-                                {ctr.code}
-                              </span>
-                              <div className="font-display font-bold text-white mt-1">
-                                {ctr.name}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[290px] overflow-y-auto pr-1">
+                    {dbState.waec_offices &&
+                      Object.values(dbState.waec_offices).map((off) => {
+                        const assignedOfficersCount = fieldMonitors.filter(
+                          (m) => m.assigned_office_id === off.id
+                        ).length;
+                        return (
+                          <div
+                            key={off.id}
+                            className={`p-3 rounded-2xl bg-[#030F26] border transition text-xs space-y-2 ${
+                              off.is_head_office
+                                ? 'border-[#FFD700]/60 bg-gradient-to-br from-[#061A3A] to-[#030F26]'
+                                : 'border-blue-900 hover:border-[#FFD700]/40'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span
+                                  className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded ${
+                                    off.is_head_office
+                                      ? 'bg-[#FFD700] text-[#002147] font-extrabold'
+                                      : 'bg-[#002147] text-[#FFD700] border border-[#FFD700]/40'
+                                  }`}
+                                >
+                                  {off.code}
+                                </span>
+                                <div className="font-display font-bold text-white mt-1">
+                                  {off.name}
+                                </div>
                               </div>
+                              <span className="text-[10px] font-mono text-emerald-400 shrink-0">
+                                {assignedOfficersCount} Base Monitor{assignedOfficersCount === 1 ? '' : 's'}
+                              </span>
                             </div>
-                            <span className="text-[10px] font-mono text-emerald-400 shrink-0">
-                              {assignedCount} Monitor{assignedCount === 1 ? '' : 's'}
-                            </span>
-                          </div>
 
-                          <div className="font-mono text-[10px] text-blue-300 truncate">
-                            {ctr.wkt || `POINT (${ctr.lng} ${ctr.lat})`}
-                          </div>
+                            <div className="font-mono text-[10px] text-blue-300 truncate">
+                              {off.wkt}
+                            </div>
 
-                          <div className="flex items-center gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng })
-                              }
-                              className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer"
-                            >
-                              🔍 View on Map
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                sentinelSync.deployMonitorToExamCenter(
-                                  focusedMonitor.id,
-                                  ctr.id
-                                );
-                                setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng });
-                              }}
-                              className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer"
-                            >
-                              📍 Deploy {focusedMonitor.name.split(' ')[0]} Here
-                            </button>
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMapFocusCoords({ lat: off.lat, lng: off.lng })
+                                }
+                                className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer"
+                              >
+                                🔍 Focus on Map
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  sentinelSync.assignOfficerOffice(focusedMonitor.id, off.id);
+                                  setMapFocusCoords({ lat: off.lat, lng: off.lng });
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer"
+                              >
+                                🏢 Assign Base to {focusedMonitor.name.split(' ')[0]}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
+                </div>
+
+                {/* EXAMINATION CENTERS HUB (KEPT STRICTLY SEPARATE) */}
+                <div className="p-5 rounded-3xl bg-[#071B3E] border border-blue-800/80 space-y-3 shadow-xl">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
+                        EXAMINATION CENTERS REGISTRY (KEPT SEPARATE FROM OFFICES)
+                      </span>
+                      <h3 className="font-display font-black text-base text-white flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#FFD700]" /> Examination Centers &amp; Geofences ({Object.keys(dbState.centers).length})
+                      </h3>
+                      <p className="text-[11px] text-blue-200">
+                        Exam centers where field monitors are deployed to inspect question paper security.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddCenterModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-xs cursor-pointer shadow-md"
+                    >
+                      <Plus className="w-4 h-4" /> Add Examination Center
+                    </button>
+                  </div>
+
+                  {Object.keys(dbState.centers).length === 0 ? (
+                    <div className="p-5 rounded-2xl bg-[#030F26] border-2 border-dashed border-[#FFD700]/30 text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-[#FFD700]/15 text-[#FFD700] flex items-center justify-center mx-auto">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div className="font-display font-bold text-white text-sm">
+                        0 Examination Centers Loaded (Awaiting Centers Data)
+                      </div>
+                      <p className="text-xs text-blue-200 max-w-md mx-auto leading-relaxed">
+                        WAEC Offices and branch depots are kept strictly separate above. When you provide examination centers, you can click <strong className="text-[#FFD700]">&quot;Add Examination Center&quot;</strong> to register each center with automated 100m geofencing.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCenterModalOpen(true)}
+                        className="px-4 py-1.5 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-[#FFD700]/50 text-[#FFD700] font-bold text-xs cursor-pointer inline-flex items-center gap-1 mt-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Register First Examination Center
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[290px] overflow-y-auto pr-1">
+                      {Object.values(dbState.centers).map((ctr) => {
+                        const assignedCount = fieldMonitors.filter(
+                          (m) => m.assigned_center_id === ctr.id
+                        ).length;
+                        return (
+                          <div
+                            key={ctr.id}
+                            className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 hover:border-[#FFD700]/50 transition text-xs space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-[#FFD700] text-[#002147]">
+                                  {ctr.code}
+                                </span>
+                                <div className="font-display font-bold text-white mt-1">
+                                  {ctr.name}
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-mono text-emerald-400 shrink-0">
+                                {assignedCount} Monitor{assignedCount === 1 ? '' : 's'}
+                              </span>
+                            </div>
+
+                            <div className="font-mono text-[10px] text-blue-300 truncate">
+                              Candidates: {ctr.candidates_count} | Radius: {ctr.radius_meters}m
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng })
+                                }
+                                className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer"
+                              >
+                                🔍 View on Map
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  sentinelSync.deployMonitorToExamCenter(
+                                    focusedMonitor.id,
+                                    ctr.id
+                                  );
+                                  setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng });
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer"
+                              >
+                                📍 Deploy {focusedMonitor.name.split(' ')[0]}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1860,7 +2076,29 @@ export function App() {
 
                   <div>
                     <label className="block font-bold text-blue-100 mb-1">
-                      Deploy to WAEC Examination Center (10 Locations)
+                      Reporting WAEC Regional Base (10 Official Offices)
+                    </label>
+                    <select
+                      aria-label="Assign Reporting WAEC Office"
+                      value={newOfficerOfficeId}
+                      onChange={(e) => {
+                        setNewOfficerOfficeId(e.target.value);
+                        const off = dbState.waec_offices?.[e.target.value];
+                        if (off) setNewOfficerZone(off.name);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-[#FFD700] font-bold"
+                    >
+                      {Object.values(dbState.waec_offices || {}).map((off) => (
+                        <option key={off.id} value={off.id}>
+                          {off.name} ({off.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">
+                      Assigned Examination Center (Optional / Pending)
                     </label>
                     <select
                       aria-label="Deploy to Examination Center"
@@ -1870,8 +2108,9 @@ export function App() {
                         setNewOfficerCenterId(e.target.value);
                         if (ctr) setNewOfficerZone(ctr.zone);
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-[#FFD700] font-bold"
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-bold"
                     >
+                      <option value="">Awaiting Examination Centers List</option>
                       {Object.values(dbState.centers).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.code} — {c.name}
@@ -1982,7 +2221,7 @@ export function App() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                         <div>
                           <label className="block font-bold text-blue-200 mb-1">
                             Role
@@ -2004,6 +2243,27 @@ export function App() {
                         </div>
                         <div>
                           <label className="block font-bold text-blue-200 mb-1">
+                            Reporting WAEC Base
+                          </label>
+                          <select
+                            aria-label="Edit Reporting WAEC Base"
+                            value={editOfficeId}
+                            onChange={(e) => {
+                              setEditOfficeId(e.target.value);
+                              const off = dbState.waec_offices?.[e.target.value];
+                              if (off) setEditZone(off.name);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-[#071B3E] border border-blue-700 text-[#FFD700] font-bold"
+                          >
+                            {Object.values(dbState.waec_offices || {}).map((off) => (
+                              <option key={off.id} value={off.id}>
+                                {off.name} ({off.code})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-bold text-blue-200 mb-1">
                             Assigned Exam Center
                           </label>
                           <select
@@ -2012,6 +2272,7 @@ export function App() {
                             onChange={(e) => setEditCenterId(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl bg-[#071B3E] border border-blue-700 text-white"
                           >
+                            <option value="">Awaiting Centers List</option>
                             {Object.values(dbState.centers).map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.code} — {c.name}
@@ -2021,7 +2282,7 @@ export function App() {
                         </div>
                         <div>
                           <label className="block font-bold text-blue-200 mb-1">
-                            Assigned Zone
+                            Assigned Zone / Notes
                           </label>
                           <input
                             type="text"
@@ -2085,9 +2346,11 @@ export function App() {
                               </div>
                               <div className="font-mono text-blue-200 mt-0.5">
                                 Phone: <strong>{o.phone}</strong> • PIN:{' '}
-                                <strong className="text-[#FFD700]">{o.pin_demo}</strong> •
-                                Center: <strong>{assignedCtr?.code || 'GH-042'}</strong> (
-                                {o.assigned_zone})
+                                <strong className="text-[#FFD700]">{o.pin_demo}</strong>
+                                {o.assigned_office_id && dbState.waec_offices?.[o.assigned_office_id] && (
+                                  <> • Base: <strong className="text-white">{dbState.waec_offices[o.assigned_office_id].name.split('—')[0]}</strong></>
+                                )}
+                                • Center: <strong className="text-[#FFD700]">{assignedCtr ? assignedCtr.code : 'Awaiting List'}</strong>
                               </div>
                             </div>
                           </div>
@@ -2263,6 +2526,150 @@ export function App() {
             </div>
           )}
         </main>
+
+        {/* MODAL: ADD EXAMINATION CENTER (HEAD OF DEPARTMENT ONLY) */}
+        {isAddCenterModalOpen && (
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-[#061A3A] border-2 border-[#FFD700] p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-blue-900 pb-3">
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700]">
+                    WAEC CENTERS REGISTRY
+                  </span>
+                  <h3 className="font-display font-black text-lg text-white flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-[#FFD700]" /> Add Examination Center
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddCenterModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-[#030F26] text-blue-200 hover:text-white border border-blue-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-blue-200 leading-relaxed">
+                Register an official WAEC Examination Center with automated 100m circular geofencing for Field Monitor deployments.
+              </p>
+
+              <form onSubmit={handleCreateExamCenter} className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Center Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Achimota Senior High School"
+                      value={newCenterName}
+                      onChange={(e) => setNewCenterName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Center Code</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. GH-042"
+                      value={newCenterCode}
+                      onChange={(e) => setNewCenterCode(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-[#FFD700] font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Region / Zone</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Greater Accra"
+                      value={newCenterZone}
+                      onChange={(e) => setNewCenterZone(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={newCenterLat}
+                      onChange={(e) => setNewCenterLat(parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={newCenterLng}
+                      onChange={(e) => setNewCenterLng(parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Geofence Radius (m)</label>
+                    <input
+                      type="number"
+                      value={newCenterRadius}
+                      onChange={(e) => setNewCenterRadius(parseInt(e.target.value) || 100)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-emerald-300 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Candidates Count</label>
+                    <input
+                      type="number"
+                      value={newCenterCandidates}
+                      onChange={(e) => setNewCenterCandidates(parseInt(e.target.value) || 400)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-blue-100 mb-1">Subject / Paper</label>
+                    <input
+                      type="text"
+                      value={newCenterPaper}
+                      onChange={(e) => setNewCenterPaper(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {centerModalFeedback && (
+                  <div className="p-3 rounded-xl bg-emerald-950 border border-emerald-400 text-emerald-200 text-xs font-bold text-center">
+                    {centerModalFeedback}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-blue-900">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCenterModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black cursor-pointer shadow-lg"
+                  >
+                    ✓ Save Examination Center
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2271,9 +2678,12 @@ export function App() {
   // SCREEN 2B: AUTHENTICATED FIELD MONITORING OFFICER MOBILE APP
   // (WITH PROFILE PICTURE UPLOAD & EVERYDAY WORK RECORDS LOGBOOK)
   // ==========================================================================
+  const assignedOffice =
+    (currentOfficer.assigned_office_id && dbState.waec_offices?.[currentOfficer.assigned_office_id]) ||
+    (dbState.waec_offices ? Object.values(dbState.waec_offices)[0] : null);
   const assignedCenter =
-    dbState.centers[currentOfficer.assigned_center_id] ||
-    Object.values(dbState.centers)[0];
+    (currentOfficer.assigned_center_id && dbState.centers[currentOfficer.assigned_center_id]) ||
+    (Object.keys(dbState.centers).length > 0 ? Object.values(dbState.centers)[0] : undefined);
   const assignedRoute = dbState.routes[currentOfficer.assigned_route_id];
 
   const geofenceStatus = checkCenterGeofence(
@@ -2347,7 +2757,7 @@ export function App() {
                 </span>
               </div>
               <p className="text-xs text-blue-200 font-mono truncate">
-                {currentOfficer.phone} • {assignedCenter?.code}
+                {currentOfficer.phone} • {assignedOffice ? assignedOffice.name.split('—')[0].trim() : 'WAEC Ghana'}{assignedCenter ? ` • ${assignedCenter.code}` : ''}
               </p>
             </div>
           </div>
@@ -2405,9 +2815,20 @@ export function App() {
                   <div className="font-display font-black text-base text-white truncate">
                     {currentOfficer.name}
                   </div>
-                  <div className="text-xs text-blue-200 font-mono">
-                    Center: <strong className="text-[#FFD700]">{assignedCenter?.code}</strong>{' '}
-                    ({assignedCenter?.name})
+                  <div className="text-xs text-blue-200 font-mono space-y-0.5">
+                    <div>
+                      Base: <strong className="text-white">{assignedOffice ? assignedOffice.name : currentOfficer.assigned_zone}</strong>
+                    </div>
+                    <div>
+                      Exam Center:{' '}
+                      {assignedCenter ? (
+                        <>
+                          <strong className="text-[#FFD700]">{assignedCenter.code}</strong> ({assignedCenter.name})
+                        </>
+                      ) : (
+                        <span className="text-amber-300 font-bold">Awaiting Centers List</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Upload / Capture Profile Picture Buttons */}
@@ -2530,46 +2951,89 @@ export function App() {
               <div className="font-display text-base font-extrabold text-white">
                 {geofenceStatus.insideCenter
                   ? geofenceStatus.insideCenter.name
-                  : assignedCenter?.name}
+                  : assignedCenter
+                  ? assignedCenter.name
+                  : `Reporting Base: ${assignedOffice ? assignedOffice.name : 'WAEC Regional Depot'}`}
               </div>
 
-              {assignedCenter?.wkt && (
+              {assignedCenter?.wkt ? (
                 <div className="text-[11px] font-mono text-[#FFD700]">
                   WKT: {assignedCenter.wkt}
                 </div>
-              )}
+              ) : assignedOffice?.wkt ? (
+                <div className="text-[11px] font-mono text-[#FFD700]">
+                  Base WKT: {assignedOffice.wkt}
+                </div>
+              ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-blue-200">
                 <span>
-                  Distance: <strong className="text-white">{geofenceStatus.nearestDistance}m</strong> (Radius: 100m)
+                  {assignedCenter ? (
+                    <>Distance: <strong className="text-white">{geofenceStatus.nearestDistance}m</strong> (Radius: 100m)</>
+                  ) : (
+                    <>Base Station: <strong className="text-[#FFD700]">{assignedOffice?.code || 'WAEC'}</strong> (Active Base)</>
+                  )}
                 </span>
                 <span>
                   Bearing: <strong className="text-[#FFD700]">{geofenceStatus.bearingToNearest}° N</strong>
                 </span>
               </div>
 
-              {/* Deployed Examination Center Selector (All 10 WKT Locations) */}
+              {/* Reporting WAEC Regional Base Selector */}
               <div className="pt-1">
                 <label className="block text-[10px] font-mono uppercase text-blue-300 mb-1">
-                  Deployed WAEC Examination Center (Switch / Check-In):
+                  Reporting WAEC Regional Base (10 Official Depots):
                 </label>
                 <select
-                  aria-label="Select Deployed WAEC Examination Center"
-                  value={currentOfficer.assigned_center_id}
+                  aria-label="Select Reporting WAEC Regional Base"
+                  value={currentOfficer.assigned_office_id || ''}
                   onChange={(e) =>
-                    sentinelSync.deployMonitorToExamCenter(
+                    sentinelSync.assignOfficerOffice(
                       currentOfficer.id,
                       e.target.value
                     )
                   }
                   className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/50 text-white text-xs font-bold"
                 >
-                  {Object.values(dbState.centers).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} — {c.name} ({c.wkt})
+                  {Object.values(dbState.waec_offices || {}).map((off) => (
+                    <option key={off.id} value={off.id}>
+                      {off.name} ({off.code})
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Deployed Examination Center Selector */}
+              <div className="pt-1">
+                <label className="block text-[10px] font-mono uppercase text-blue-300 mb-1">
+                  Deployed Examination Center (100m Geofence):
+                </label>
+                {Object.keys(dbState.centers).length === 0 ? (
+                  <div className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900 text-[11px] text-blue-200 flex items-center justify-between">
+                    <span>Awaiting examination centers list upload</span>
+                    <span className="text-[10px] font-mono text-[#FFD700] bg-[#071B3E] px-2 py-0.5 rounded border border-[#FFD700]/30 font-bold">
+                      PENDING
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    aria-label="Select Deployed WAEC Examination Center"
+                    value={currentOfficer.assigned_center_id}
+                    onChange={(e) =>
+                      sentinelSync.deployMonitorToExamCenter(
+                        currentOfficer.id,
+                        e.target.value
+                      )
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/50 text-white text-xs font-bold"
+                  >
+                    {Object.values(dbState.centers).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.code} — {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">
@@ -2581,25 +3045,31 @@ export function App() {
                         lng: assignedCenter.lng,
                         speed: 1.2,
                       });
+                    } else if (assignedOffice) {
+                      sentinelSync.updateOfficerLocation(currentOfficer.id, {
+                        lat: assignedOffice.lat,
+                        lng: assignedOffice.lng,
+                        speed: 1.2,
+                      });
                     }
                   }}
                   className="py-2 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer"
                 >
-                  📍 Arrive at Exam Center
+                  {assignedCenter ? '📍 Arrive at Exam Center' : '🏢 Arrive at WAEC Base'}
                 </button>
                 <button
                   onClick={() => {
-                    if (assignedCenter) {
-                      sentinelSync.updateOfficerLocation(currentOfficer.id, {
-                        lat: assignedCenter.lat + 0.002,
-                        lng: assignedCenter.lng - 0.002,
-                        speed: 28.5,
-                      });
-                    }
+                    const baseLat = assignedCenter ? assignedCenter.lat : (assignedOffice?.lat || currentLocation.lat);
+                    const baseLng = assignedCenter ? assignedCenter.lng : (assignedOffice?.lng || currentLocation.lng);
+                    sentinelSync.updateOfficerLocation(currentOfficer.id, {
+                      lat: baseLat + 0.003,
+                      lng: baseLng - 0.003,
+                      speed: 28.5,
+                    });
                   }}
                   className="py-2 px-3 rounded-xl bg-[#FFD700]/20 hover:bg-[#FFD700]/30 border border-[#FFD700]/50 text-[#FFD700] text-xs font-bold cursor-pointer"
                 >
-                  🚗 Depart Center (&gt;100m)
+                  🚗 Depart Perimeter (&gt;100m)
                 </button>
               </div>
             </div>
@@ -2881,15 +3351,23 @@ export function App() {
                 </span>
               </div>
               <div className="text-[11px] text-blue-200 font-mono">
-                Target Center: {assignedCenter?.code} ({assignedCenter?.name}) •{' '}
-                {routeProgress.progressPct}% Complete
+                {assignedCenter ? (
+                  <>
+                    Target Center: {assignedCenter.code} ({assignedCenter.name}) •{' '}
+                    {routeProgress.progressPct}% Complete
+                  </>
+                ) : (
+                  <>
+                    Base Depot: {assignedOffice ? assignedOffice.name : 'WAEC Office'} • Target Exam Center: Pending Assignment
+                  </>
+                )}
               </div>
             </div>
 
             <div className="rounded-2xl overflow-hidden border-2 border-[#FFD700]/40 h-80 relative">
               <MapContainer
                 center={[currentLocation.lat, currentLocation.lng]}
-                zoom={14}
+                zoom={13}
                 style={{ height: '100%', width: '100%' }}
               >
                 <TileLayer
@@ -2897,6 +3375,28 @@ export function App() {
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 <MapRecenter lat={currentLocation.lat} lng={currentLocation.lng} />
+
+                {/* WAEC Regional Offices Markers */}
+                {dbState.waec_offices &&
+                  Object.values(dbState.waec_offices).map((office) => (
+                    <Marker
+                      key={office.id}
+                      position={[office.lat, office.lng]}
+                      icon={createOfficeMarkerIcon(office)}
+                    >
+                      <Popup>
+                        <div className="text-xs font-sans space-y-1">
+                          <span className="px-1.5 py-0.5 rounded bg-[#FFD700] text-[#002147] font-bold text-[9px]">
+                            {office.is_head_office ? 'WAEC HQ' : 'WAEC OFFICE'}
+                          </span>
+                          <strong className="text-[#002147] block text-xs">
+                            {office.name}
+                          </strong>
+                          <div className="text-slate-600 text-[10px]">{office.description}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
 
                 {assignedCenter && (
                   <Circle
@@ -2978,8 +3478,8 @@ export function App() {
                 </span>
               </div>
               <p className="text-blue-200 text-[11px]">
-                Burns your GPS coordinates, UTC timestamp, Center Code (
-                {assignedCenter?.code}), and Officer ID directly onto the image pixels.
+                Burns your GPS coordinates, UTC timestamp, Center / Office Code (
+                {assignedCenter?.code || assignedOffice?.code || 'WAEC-GH'}), and Officer ID directly onto the image pixels.
               </p>
 
               <div>
