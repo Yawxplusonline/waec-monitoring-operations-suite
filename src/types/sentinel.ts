@@ -85,6 +85,8 @@ export interface LiveLocation {
   transit_mode: boolean;
   stationary_since?: number;
   is_mock?: boolean;
+  is_real_device_gps?: boolean;
+  accuracy_meters?: number;
   updated_at: number;
 }
 

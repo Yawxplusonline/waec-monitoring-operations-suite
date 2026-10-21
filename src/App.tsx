@@ -66,6 +66,7 @@ import {
   checkCenterGeofence,
   calculateRouteDeviationMeters,
   calculateRouteProgress,
+  calculateDistanceMeters,
 } from './services/geofenceEngine';
 import { generateWatermarkedEvidenceImage } from './services/watermarkEngine';
 import { computePinHash, generateDefaultDeviceId } from './services/authCrypto';
@@ -113,21 +114,29 @@ function createOfficeMarkerIcon(office: WaecOffice) {
   });
 }
 
-function createFleetMarkerIcon(officer: OfficerProfile, transitMode: boolean) {
+function createFleetMarkerIcon(
+  officer: OfficerProfile,
+  transitMode: boolean,
+  isRealPhoneGps = false
+) {
   const isSos = officer.status === 'SOS';
   const isOffline = officer.status === 'OFFLINE' || !officer.on_shift;
   const bg = isSos
     ? '#ef4444'
     : isOffline
     ? '#64748b'
+    : isRealPhoneGps
+    ? '#10b981'
     : transitMode
     ? '#FFD700'
-    : '#10b981';
+    : '#0284c7';
   const ring = isSos
-    ? 'rgba(239,68,68,0.45)'
+    ? 'rgba(239,68,68,0.55)'
+    : isRealPhoneGps
+    ? 'rgba(16,185,129,0.50)'
     : transitMode
     ? 'rgba(255,215,0,0.40)'
-    : 'rgba(16,185,129,0.35)';
+    : 'rgba(2,132,199,0.35)';
   const initials = officer.name
     .split(' ')
     .map((n) => n[0])
@@ -138,19 +147,24 @@ function createFleetMarkerIcon(officer: OfficerProfile, transitMode: boolean) {
   return L.divIcon({
     className: 'custom-fleet-marker',
     html: `
-      <div style="position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;">
+      <div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
         ${
           !isOffline
             ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${ring};animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></span>`
             : ''
         }
-        <div style="width:30px;height:30px;border-radius:9999px;background:${bg};border:3px solid #002147;box-shadow:0 4px 10px rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;color:#002147;font-weight:900;font-size:10px;font-family:monospace;">
+        <div style="width:32px;height:32px;border-radius:9999px;background:${bg};border:3px solid #002147;box-shadow:0 4px 12px rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:900;font-size:11px;font-family:monospace;position:relative;">
           ${initials}
+          ${
+            isRealPhoneGps
+              ? `<span title="Hardware Phone GPS" style="position:absolute;-top:6px;-right:6px;background:#FFD700;color:#002147;font-size:8px;padding:1px 3px;border-radius:6px;border:1px solid #002147;font-weight:900;line-height:1;">GPS</span>`
+              : ''
+          }
         </div>
       </div>
     `,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 }
 
@@ -222,9 +236,34 @@ export function App() {
   const [lastWatermarkedPreview, setLastWatermarkedPreview] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
 
-  // Offline Hive Buffer & Browser Geolocation Watch State
+  // Offline Hive Buffer & Real-Time Phone Geolocation Watch State
   const [isOffline, setIsOffline] = useState<boolean>(sentinelSync.isNetworkOffline());
-  const [usingRealBrowserGps, setUsingRealBrowserGps] = useState<boolean>(false);
+  const [usingRealBrowserGps, setUsingRealBrowserGps] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('waec_real_gps_active') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [gpsPermissionState, setGpsPermissionState] = useState<
+    'idle' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'error'
+  >('idle');
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
+  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
+  const [lastGpsTimestamp, setLastGpsTimestamp] = useState<number | null>(null);
+  const gpsWakeLockRef = useRef<any>(null);
+
+  const handleToggleRealGps = () => {
+    const next = !usingRealBrowserGps;
+    setUsingRealBrowserGps(next);
+    try {
+      localStorage.setItem('waec_real_gps_active', String(next));
+    } catch (_) {}
+    if (!next) {
+      setGpsPermissionState('idle');
+      setGpsErrorMessage(null);
+    }
+  };
 
   // Head of Department Dashboard State
   const [selectedMonitorId, setSelectedMonitorId] = useState<string>('officer_001');
@@ -367,23 +406,120 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
-  // Real HTML5 Geolocation API watcher when enabled by the officer
+  // Real HTML5 Geolocation API watcher with high-accuracy live tracking
   useEffect(() => {
-    if (!usingRealBrowserGps || !authenticatedOfficerId || !navigator.geolocation) return;
+    if (!usingRealBrowserGps || !authenticatedOfficerId) {
+      if (gpsWakeLockRef.current) {
+        try {
+          gpsWakeLockRef.current.release();
+        } catch (_) {}
+        gpsWakeLockRef.current = null;
+      }
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setGpsPermissionState('unsupported');
+      setGpsErrorMessage('Hardware GPS is not supported by your phone browser.');
+      setUsingRealBrowserGps(false);
+      return;
+    }
+
+    // Request Screen WakeLock so phone screen standby doesn't throttle or freeze GPS
+    if ('wakeLock' in navigator && (navigator as any).wakeLock?.request) {
+      (navigator as any).wakeLock
+        .request('screen')
+        .then((lock: any) => {
+          gpsWakeLockRef.current = lock;
+        })
+        .catch(() => {});
+    }
+
+    // Query physical device battery if supported by browser
+    let currentBattery = 90;
+    if ('getBattery' in navigator && typeof (navigator as any).getBattery === 'function') {
+      (navigator as any).getBattery().then((batt: any) => {
+        currentBattery = Math.round(batt.level * 100);
+      }).catch(() => {});
+    }
+
+    setGpsPermissionState('prompt');
+    setGpsErrorMessage(null);
+
+    let prevLat: number | null = null;
+    let prevLng: number | null = null;
+    let prevTime: number | null = null;
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const speedKmh = pos.coords.speed ? Math.max(0, pos.coords.speed * 3.6) : 14.5;
+        setGpsPermissionState('granted');
+        setGpsErrorMessage(null);
+        setGpsAccuracyMeters(Math.round(pos.coords.accuracy));
+        setLastGpsTimestamp(Date.now());
+
+        const curLat = pos.coords.latitude;
+        const curLng = pos.coords.longitude;
+        const curTime = Date.now();
+
+        // Calculate speed (km/h): hardware GPS speed or calculated displacement over time
+        let speedKmh = 0;
+        if (pos.coords.speed !== null && !isNaN(pos.coords.speed) && pos.coords.speed >= 0) {
+          speedKmh = pos.coords.speed * 3.6;
+        } else if (prevLat !== null && prevLng !== null && prevTime !== null) {
+          const dtHours = (curTime - prevTime) / 3600000;
+          if (dtHours > 0) {
+            const distKm = calculateDistanceMeters(prevLat, prevLng, curLat, curLng) / 1000;
+            speedKmh = Math.min(180, distKm / dtHours);
+          }
+        }
+
+        prevLat = curLat;
+        prevLng = curLng;
+        prevTime = curTime;
+
         sentinelSync.updateOfficerLocation(authenticatedOfficerId, {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          heading: pos.coords.heading || 45,
+          lat: curLat,
+          lng: curLng,
+          heading: pos.coords.heading || 0,
           speed: Number(speedKmh.toFixed(1)),
+          battery: currentBattery,
+          is_real_device_gps: true,
+          accuracy_meters: Math.round(pos.coords.accuracy),
+          is_mock: false,
         });
       },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 1000 }
+      (err) => {
+        setGpsPermissionState(err.code === 1 ? 'denied' : 'error');
+        if (err.code === 1) {
+          setGpsErrorMessage(
+            'Location permission denied. Please allow location access in your phone/browser settings so your live monitoring info can stream to WAEC Command.'
+          );
+        } else if (err.code === 2) {
+          setGpsErrorMessage(
+            'GPS position unavailable. Please ensure your phone Location/GPS is turned ON in quick settings.'
+          );
+        } else if (err.code === 3) {
+          setGpsErrorMessage('GPS signal acquisition timed out. Retrying...');
+        } else {
+          setGpsErrorMessage(`GPS error: ${err.message}`);
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 1000,
+      }
     );
-    return () => navigator.geolocation.clearWatch(watchId);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      if (gpsWakeLockRef.current) {
+        try {
+          gpsWakeLockRef.current.release();
+        } catch (_) {}
+        gpsWakeLockRef.current = null;
+      }
+    };
   }, [usingRealBrowserGps, authenticatedOfficerId]);
 
   const livePinHashPreview = computePinHash(loginPhone, loginPin);
@@ -1601,21 +1737,35 @@ export function App() {
                           )}
                           <Marker
                             position={[loc.lat, loc.lng]}
-                            icon={createFleetMarkerIcon(monitor, loc.transit_mode)}
+                            icon={createFleetMarkerIcon(monitor, loc.transit_mode, !!loc.is_real_device_gps)}
                             eventHandlers={{
                               click: () => setSelectedMonitorId(monitor.id),
                             }}
                           >
                             <Popup>
                               <div className="text-xs font-sans space-y-1">
-                                <div className="font-bold text-slate-900">
-                                  {monitor.name} ({monitor.role})
+                                <div className="font-bold text-slate-900 flex items-center justify-between gap-1">
+                                  <span>{monitor.name}</span>
+                                  {loc.is_real_device_gps && (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-mono font-bold">
+                                      📱 PHONE GPS
+                                    </span>
+                                  )}
                                 </div>
-                                <div>Phone: {monitor.phone}</div>
-                                <div>
-                                  Speed: {loc.speed.toFixed(1)} km/h | Battery:{' '}
-                                  {loc.battery}%
+                                <div className="text-slate-600 text-[11px]">{monitor.role} • {monitor.phone}</div>
+                                <div className="font-mono text-[10px] text-blue-900 bg-blue-50 p-1 rounded border border-blue-200">
+                                  Coords: {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}
+                                  {loc.accuracy_meters ? ` (±${loc.accuracy_meters}m)` : ''}
                                 </div>
+                                <div className="text-[11px]">
+                                  Speed: <strong>{loc.speed.toFixed(1)} km/h</strong> | Battery:{' '}
+                                  <strong>{loc.battery}%</strong>
+                                </div>
+                                {monitor.assigned_center_id && dbState.centers[monitor.assigned_center_id] && (
+                                  <div className="text-[10px] text-slate-700 pt-1 border-t border-slate-200">
+                                    Target Center: <strong>{dbState.centers[monitor.assigned_center_id].name}</strong> ({dbState.centers[monitor.assigned_center_id].code})
+                                  </div>
+                                )}
                               </div>
                             </Popup>
                           </Marker>
@@ -1976,6 +2126,12 @@ export function App() {
                               <span>🚗 {loc ? `${loc.speed.toFixed(1)} km/h` : '0 km/h'}</span>
                               <span>🔋 {loc ? `${loc.battery}%` : '100%'}</span>
                             </div>
+                            {loc?.is_real_device_gps && (
+                              <div className="flex items-center gap-1.5 text-[9px] font-mono text-emerald-300 font-bold mt-1 bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                <span>STREAMING LIVE PHONE GPS {loc.accuracy_meters ? `(±${loc.accuracy_meters}m)` : ''}</span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-blue-900/60">
                               <span
                                 role="button"
@@ -3016,6 +3172,164 @@ export function App() {
               )}
             </div>
 
+            {/* PROMINENT REAL-TIME PHONE LOCATION SWITCH CARD */}
+            <div
+              className={`p-4 rounded-3xl border-2 transition-all shadow-xl space-y-3.5 ${
+                usingRealBrowserGps
+                  ? 'bg-gradient-to-br from-[#012820] via-[#002147] to-[#04122C] border-emerald-400/90 ring-2 ring-emerald-500/20'
+                  : 'bg-gradient-to-br from-[#071B3E] via-[#04122C] to-[#002147] border-[#FFD700]/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-md shrink-0 transition-colors ${
+                      usingRealBrowserGps
+                        ? 'bg-emerald-500 text-[#002147]'
+                        : 'bg-[#FFD700] text-[#002147]'
+                    }`}
+                  >
+                    <Navigation
+                      className={`w-6 h-6 ${usingRealBrowserGps ? 'animate-pulse' : ''}`}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-extrabold uppercase tracking-widest text-[#FFD700] block">
+                      MONITOR LIVE POSITION
+                    </span>
+                    <h3 className="font-display font-black text-base text-white leading-tight">
+                      Real-Time Phone GPS
+                    </h3>
+                    <p className="text-[11px] text-blue-200">
+                      {usingRealBrowserGps
+                        ? 'Broadcasting live device coordinates to Head of Dept'
+                        : 'Switch ON to stream live GPS from your phone'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Primary High-Impact Toggle Switch */}
+                <button
+                  type="button"
+                  onClick={handleToggleRealGps}
+                  className={`px-4 py-2.5 rounded-2xl font-display font-black text-xs cursor-pointer shadow-lg transition-all shrink-0 flex items-center gap-2 ${
+                    usingRealBrowserGps
+                      ? 'bg-emerald-400 hover:bg-emerald-300 text-[#002147] ring-2 ring-emerald-300/50'
+                      : 'bg-[#FFD700] hover:bg-[#F4C430] text-[#002147]'
+                  }`}
+                >
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      usingRealBrowserGps ? 'bg-red-600 animate-ping' : 'bg-[#002147]'
+                    }`}
+                  />
+                  <span>{usingRealBrowserGps ? 'Location: ACTIVE' : 'Switch Location ON'}</span>
+                </button>
+              </div>
+
+              {/* Live Streaming Diagnostics when ON */}
+              {usingRealBrowserGps ? (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between text-xs bg-[#030F26] p-2.5 rounded-xl border border-emerald-500/40">
+                    <span className="flex items-center gap-2 text-emerald-300 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                      Live GPS Stream Active (High Accuracy Mode)
+                    </span>
+                    {gpsAccuracyMeters !== null && (
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold shrink-0">
+                        ±{gpsAccuracyMeters}m Accuracy
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900">
+                      <span className="text-[10px] text-blue-300 block">CURRENT PHONE COORDS</span>
+                      <span className="text-white font-bold">
+                        {currentLocation.lat.toFixed(5)}, {currentLocation.lng.toFixed(5)}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900">
+                      <span className="text-[10px] text-blue-300 block">SPEED &amp; STATUS</span>
+                      <span className="text-[#FFD700] font-bold">
+                        {currentLocation.speed > 2
+                          ? `${currentLocation.speed.toFixed(1)} km/h (Moving)`
+                          : 'Stationary (0.0 km/h)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {assignedCenter && (
+                    <div className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900 flex items-center justify-between text-xs">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] font-mono text-blue-300 block">
+                          ASSIGNED EXAMINATION CENTER
+                        </span>
+                        <span className="font-bold text-white truncate block">
+                          {assignedCenter.name} ({assignedCenter.code})
+                        </span>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {calculateDistanceMeters(
+                          currentLocation.lat,
+                          currentLocation.lng,
+                          assignedCenter.lat,
+                          assignedCenter.lng
+                        ) <= assignedCenter.radius_meters ? (
+                          <span className="font-mono font-bold text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Inside Center (100m)
+                          </span>
+                        ) : (
+                          <span className="font-mono font-bold text-[11px] text-[#FFD700]">
+                            {Math.round(
+                              calculateDistanceMeters(
+                                currentLocation.lat,
+                                currentLocation.lng,
+                                assignedCenter.lat,
+                                assignedCenter.lng
+                              )
+                            )}{' '}
+                            meters away
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 text-xs text-blue-200 space-y-1">
+                  <p className="leading-relaxed">
+                    Tap <strong className="text-[#FFD700]">&quot;Switch Location ON&quot;</strong> above. The app will read your phone&apos;s real-time GPS hardware, stream your live position directly to the Head of Monitoring Team, and automatically log your arrival when you enter the 100m perimeter of your assigned examination center.
+                  </p>
+                </div>
+              )}
+
+              {/* Location Permission / Error Alert with Retry */}
+              {gpsErrorMessage && (
+                <div className="p-3 rounded-xl bg-red-950/90 border border-red-500 text-red-200 text-xs space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertOctagon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-red-100 font-bold">Location Access Notice:</strong>
+                      <span>{gpsErrorMessage}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGpsErrorMessage(null);
+                        handleToggleRealGps();
+                      }}
+                      className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] cursor-pointer"
+                    >
+                      Retry GPS Access
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Shift Privacy & Escort Mode Toggles */}
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -3239,14 +3553,15 @@ export function App() {
                   <Navigation className="w-4 h-4 text-[#FFD700]" /> Handset GPS Telemetry
                 </span>
                 <button
-                  onClick={() => setUsingRealBrowserGps((v) => !v)}
-                  className={`px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold border cursor-pointer ${
+                  type="button"
+                  onClick={handleToggleRealGps}
+                  className={`px-3 py-1 rounded-xl font-mono text-[10px] font-bold border cursor-pointer transition ${
                     usingRealBrowserGps
                       ? 'bg-emerald-500 text-[#002147] border-emerald-400'
                       : 'bg-[#030F26] text-blue-200 border-blue-800'
                   }`}
                 >
-                  {usingRealBrowserGps ? 'Hardware GPS: ON' : 'Use Device GPS'}
+                  {usingRealBrowserGps ? 'Phone GPS: ACTIVE' : 'Switch Phone GPS'}
                 </button>
               </div>
 
@@ -3269,6 +3584,18 @@ export function App() {
                     {currentLocation.speed > 5 ? 'Every 1.0s' : 'Every 30s'}
                   </span>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-blue-200 px-1 font-mono">
+                <span>
+                  Source:{' '}
+                  <strong className={usingRealBrowserGps ? 'text-emerald-300' : 'text-blue-300'}>
+                    {usingRealBrowserGps ? 'Physical Phone GPS Hardware' : 'Terminal Simulation Mode'}
+                  </strong>
+                </span>
+                {usingRealBrowserGps && gpsAccuracyMeters !== null && (
+                  <span className="text-[#FFD700] font-bold">Accuracy: ±{gpsAccuracyMeters}m</span>
+                )}
               </div>
 
               <div className="pt-2 border-t border-blue-900 flex items-center justify-between">
