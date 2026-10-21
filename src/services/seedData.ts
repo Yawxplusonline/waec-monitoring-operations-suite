@@ -1,5 +1,6 @@
 import { SentinelDatabaseSchema, WaecOffice } from '../types/sentinel';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
+import { OFFICIAL_EXAM_CENTERS } from './examCentersData';
 
 export function buildOfficialWaecAvatar(
   initials: string,
@@ -131,8 +132,8 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
   // 10 OFFICIAL WAEC OFFICES & DEPOTS (KEPT SEPARATE FROM EXAM CENTERS)
   waec_offices: WAEC_OFFICES_REGISTRY,
 
-  // EXAM CENTERS REGISTRY: KEPT SEPARATE. User will provide exam centers later.
-  centers: {},
+  // 305 OFFICIAL WAEC EXAMINATION CENTERS (CONSOLIDATED REGISTRY)
+  centers: OFFICIAL_EXAM_CENTERS,
 
   officers: {
     head_001: {
@@ -146,7 +147,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-HOD-001',
       assigned_office_id: 'office_WAEC_ACC',
       assigned_zone: 'Accra — WAEC Head Office, Ghana',
-      assigned_center_id: '',
+      assigned_center_id: 'center_achimota_senior_high',
       assigned_route_id: 'route_ACC_KOF',
       whitelisted: true,
       locked_out: false,
@@ -185,7 +186,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-FM-101',
       assigned_office_id: 'office_WAEC_ACC',
       assigned_zone: 'Greater Accra (WAEC Head Office Base)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_achimota_senior_high',
       assigned_route_id: 'route_ACC_KOF',
       whitelisted: true,
       locked_out: false,
@@ -224,7 +225,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-FM-102',
       assigned_office_id: 'office_WAEC_CPC',
       assigned_zone: 'Central Region (WAEC Cape Coast Office Base)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_adisadel_college',
       assigned_route_id: 'route_ACC_CPC',
       whitelisted: true,
       locked_out: false,
@@ -263,7 +264,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-FM-103',
       assigned_office_id: 'office_WAEC_KMS',
       assigned_zone: 'Ashanti Region (WAEC Kumasi Office Base)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_kumasi_high_school',
       assigned_route_id: 'route_KOF_KMS',
       whitelisted: true,
       locked_out: false,
@@ -302,7 +303,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-HOD-002',
       assigned_office_id: 'office_WAEC_ACC',
       assigned_zone: 'National Operations Command (Accra)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_accra_academy',
       assigned_route_id: 'route_ACC_KOF',
       whitelisted: true,
       locked_out: false,
@@ -341,7 +342,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-FM-105',
       assigned_office_id: 'office_WAEC_KOF',
       assigned_zone: 'Eastern Region (WAEC Koforidua Office Base)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_aburi_girls_senior_high',
       assigned_route_id: 'route_ACC_KOF',
       whitelisted: true,
       locked_out: false,
@@ -380,7 +381,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       staff_badge_no: 'WAEC-FM-106',
       assigned_office_id: 'office_WAEC_TML',
       assigned_zone: 'Northern Region (WAEC Tamale Office Base)',
-      assigned_center_id: '',
+      assigned_center_id: 'center_tamale_senior_high',
       assigned_route_id: 'route_KMS_TML',
       whitelisted: true,
       locked_out: false,

@@ -23,8 +23,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v9';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v9';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v10';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v10';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -80,7 +80,10 @@ class RealtimeSyncEngine {
         const parsed = JSON.parse(raw) as SentinelDatabaseSchema;
         if (parsed && parsed.officers) {
           parsed.waec_offices = parsed.waec_offices || INITIAL_SEED_DATA.waec_offices || {};
-          parsed.centers = parsed.centers || {};
+          parsed.centers =
+            parsed.centers && Object.keys(parsed.centers).length > 0
+              ? parsed.centers
+              : INITIAL_SEED_DATA.centers || {};
           parsed.auth_audit_logs = parsed.auth_audit_logs || {};
           parsed.location_trails = parsed.location_trails || INITIAL_SEED_DATA.location_trails;
           parsed.telegram_dispatches = parsed.telegram_dispatches || {};

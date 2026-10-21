@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -50,6 +50,8 @@ import {
   Save,
   Building2,
   Plus,
+  Search,
+  Filter,
 } from 'lucide-react';
 import {
   SentinelDatabaseSchema,
@@ -268,6 +270,55 @@ export function App() {
   const [newCenterCandidates, setNewCenterCandidates] = useState<number>(450);
   const [newCenterPaper, setNewCenterPaper] = useState<string>('WASSCE-302-CORE-MATH');
   const [centerModalFeedback, setCenterModalFeedback] = useState<string | null>(null);
+
+  // Examination Centers Search & Regional Filter State (305 Centers Registry)
+  const [centerSearchQuery, setCenterSearchQuery] = useState<string>('');
+  const [centerRegionFilter, setCenterRegionFilter] = useState<string>('ALL');
+
+  // Centers Registry Derived State (305 Official Exam Centers)
+  const allCentersList = useMemo(
+    () => Object.values(dbState.centers || {}),
+    [dbState.centers]
+  );
+
+  const uniqueCenterRegions = useMemo(() => {
+    const set = new Set<string>();
+    allCentersList.forEach((c) => {
+      const match = c.zone?.match(/^(.*?)\s*\(/);
+      const reg = match ? match[1].trim() : c.zone?.trim() || 'Other';
+      if (reg) set.add(reg);
+    });
+    return Array.from(set).sort();
+  }, [allCentersList]);
+
+  const filteredExamCenters = useMemo(() => {
+    const q = centerSearchQuery.trim().toLowerCase();
+    return allCentersList.filter((ctr) => {
+      const matchesSearch =
+        !q ||
+        ctr.name.toLowerCase().includes(q) ||
+        ctr.code.toLowerCase().includes(q) ||
+        ctr.zone.toLowerCase().includes(q);
+      const matchesRegion =
+        centerRegionFilter === 'ALL' ||
+        ctr.zone.toLowerCase().startsWith(centerRegionFilter.toLowerCase());
+      return matchesSearch && matchesRegion;
+    });
+  }, [allCentersList, centerSearchQuery, centerRegionFilter]);
+
+  const centersGroupedByRegion = useMemo(() => {
+    const grouped: Record<string, ExamCenter[]> = {};
+    allCentersList.forEach((c) => {
+      const match = c.zone?.match(/^(.*?)\s*\(/);
+      const reg = match ? match[1].trim() : c.zone?.trim() || 'General';
+      if (!grouped[reg]) grouped[reg] = [];
+      grouped[reg].push(c);
+    });
+    Object.keys(grouped).forEach((r) => {
+      grouped[r].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return grouped;
+  }, [allCentersList]);
 
   useEffect(() => {
     const unsubscribe = sentinelSync.subscribe((newState) => {
@@ -1482,7 +1533,7 @@ export function App() {
                       ))}
 
                     {/* EXAMINATION CENTERS WITH 100M CIRCULAR GEOFENCES (KEPT SEPARATE) */}
-                    {Object.values(dbState.centers).map((center) => (
+                    {filteredExamCenters.map((center) => (
                       <React.Fragment key={center.id}>
                         <Circle
                           center={[center.lat, center.lng]}
@@ -1503,6 +1554,7 @@ export function App() {
                               <strong className="text-[#002147] block">
                                 {center.code}: {center.name}
                               </strong>
+                              <div className="text-slate-600 text-[11px] font-semibold">{center.zone}</div>
                               {center.wkt && (
                                 <div className="font-mono text-[10px] text-slate-600">
                                   WKT: {center.wkt}
@@ -1686,30 +1738,97 @@ export function App() {
                 </div>
 
                 {/* EXAMINATION CENTERS HUB (KEPT STRICTLY SEPARATE) */}
-                <div className="p-5 rounded-3xl bg-[#071B3E] border border-blue-800/80 space-y-3 shadow-xl">
+                <div className="p-5 rounded-3xl bg-[#071B3E] border border-blue-800/80 space-y-3.5 shadow-xl">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
                         EXAMINATION CENTERS REGISTRY (KEPT SEPARATE FROM OFFICES)
                       </span>
                       <h3 className="font-display font-black text-base text-white flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-[#FFD700]" /> Examination Centers &amp; Geofences ({Object.keys(dbState.centers).length})
+                        <MapPin className="w-4 h-4 text-[#FFD700]" /> Examination Centers &amp; Geofences ({allCentersList.length})
                       </h3>
                       <p className="text-[11px] text-blue-200">
-                        Exam centers where field monitors are deployed to inspect question paper security.
+                        Official Ghana High Schools &amp; Technical Institutes deployed with 100m geofencing.
                       </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setIsAddCenterModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-xs cursor-pointer shadow-md"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-xs cursor-pointer shadow-md transition"
                     >
                       <Plus className="w-4 h-4" /> Add Examination Center
                     </button>
                   </div>
 
-                  {Object.keys(dbState.centers).length === 0 ? (
+                  {/* Instant Search & Regional Filter Controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1">
+                    <div className="sm:col-span-7 relative">
+                      <Search className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Search 305 examination centers (e.g. Achimota, Kumasi, Accra Academy)..."
+                        value={centerSearchQuery}
+                        onChange={(e) => setCenterSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white placeholder-blue-300 text-xs focus:outline-none focus:border-[#FFD700]"
+                      />
+                      {centerSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setCenterSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-5 relative">
+                      <Filter className="w-4 h-4 text-[#FFD700] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        aria-label="Filter Centers by Region"
+                        value={centerRegionFilter}
+                        onChange={(e) => setCenterRegionFilter(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white text-xs font-bold focus:outline-none focus:border-[#FFD700]"
+                      >
+                        <option value="ALL">All Ghana Regions ({allCentersList.length})</option>
+                        {uniqueCenterRegions.map((reg) => {
+                          const countInReg = allCentersList.filter((c) =>
+                            c.zone.toLowerCase().startsWith(reg.toLowerCase())
+                          ).length;
+                          return (
+                            <option key={reg} value={reg}>
+                              {reg} ({countInReg})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-blue-200 px-0.5">
+                    <span>
+                      Showing <strong className="text-[#FFD700] font-mono">{filteredExamCenters.length}</strong> of{' '}
+                      <strong className="text-white font-mono">{allCentersList.length}</strong> Centers
+                      {centerRegionFilter !== 'ALL' && (
+                        <span className="ml-1 text-slate-300 font-semibold">in {centerRegionFilter}</span>
+                      )}
+                    </span>
+                    {(centerSearchQuery || centerRegionFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCenterSearchQuery('');
+                          setCenterRegionFilter('ALL');
+                        }}
+                        className="text-[#FFD700] hover:underline text-[10px] font-bold cursor-pointer"
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+
+                  {allCentersList.length === 0 ? (
                     <div className="p-5 rounded-2xl bg-[#030F26] border-2 border-dashed border-[#FFD700]/30 text-center space-y-2">
                       <div className="w-10 h-10 rounded-full bg-[#FFD700]/15 text-[#FFD700] flex items-center justify-center mx-auto">
                         <MapPin className="w-5 h-5" />
@@ -1718,19 +1837,31 @@ export function App() {
                         0 Examination Centers Loaded (Awaiting Centers Data)
                       </div>
                       <p className="text-xs text-blue-200 max-w-md mx-auto leading-relaxed">
-                        WAEC Offices and branch depots are kept strictly separate above. When you provide examination centers, you can click <strong className="text-[#FFD700]">&quot;Add Examination Center&quot;</strong> to register each center with automated 100m geofencing.
+                        WAEC Offices and branch depots are kept strictly separate above.
+                      </p>
+                    </div>
+                  ) : filteredExamCenters.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-[#030F26] border border-blue-900 text-center space-y-2">
+                      <div className="text-amber-400 font-bold text-xs">
+                        No examination centers match your search &quot;{centerSearchQuery}&quot; {centerRegionFilter !== 'ALL' ? `in ${centerRegionFilter}` : ''}
+                      </div>
+                      <p className="text-[11px] text-blue-200">
+                        Try modifying your search term or select another region filter.
                       </p>
                       <button
                         type="button"
-                        onClick={() => setIsAddCenterModalOpen(true)}
-                        className="px-4 py-1.5 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-[#FFD700]/50 text-[#FFD700] font-bold text-xs cursor-pointer inline-flex items-center gap-1 mt-1"
+                        onClick={() => {
+                          setCenterSearchQuery('');
+                          setCenterRegionFilter('ALL');
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-[#FFD700]/50 text-[#FFD700] text-xs font-bold cursor-pointer inline-flex items-center gap-1"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Register First Examination Center
+                        <X className="w-3.5 h-3.5" /> Clear Filters
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[290px] overflow-y-auto pr-1">
-                      {Object.values(dbState.centers).map((ctr) => {
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+                      {filteredExamCenters.map((ctr) => {
                         const assignedCount = fieldMonitors.filter(
                           (m) => m.assigned_center_id === ctr.id
                         ).length;
@@ -1744,17 +1875,21 @@ export function App() {
                                 <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-[#FFD700] text-[#002147]">
                                   {ctr.code}
                                 </span>
-                                <div className="font-display font-bold text-white mt-1">
+                                <div className="font-display font-bold text-white mt-1 leading-snug">
                                   {ctr.name}
                                 </div>
+                                <div className="text-[11px] text-blue-200 font-medium">
+                                  {ctr.zone}
+                                </div>
                               </div>
-                              <span className="text-[10px] font-mono text-emerald-400 shrink-0">
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full shrink-0 ${assignedCount > 0 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'bg-blue-900/40 text-blue-300'}`}>
                                 {assignedCount} Monitor{assignedCount === 1 ? '' : 's'}
                               </span>
                             </div>
 
-                            <div className="font-mono text-[10px] text-blue-300 truncate">
-                              Candidates: {ctr.candidates_count} | Radius: {ctr.radius_meters}m
+                            <div className="flex items-center justify-between font-mono text-[10px] text-blue-300 bg-[#071B3E] px-2 py-1 rounded-lg">
+                              <span>Candidates: <strong className="text-white">{ctr.candidates_count}</strong></span>
+                              <span>Radius: <strong className="text-[#FFD700]">{ctr.radius_meters}m</strong></span>
                             </div>
 
                             <div className="flex items-center gap-2 pt-1">
@@ -1763,7 +1898,7 @@ export function App() {
                                 onClick={() =>
                                   setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng })
                                 }
-                                className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer"
+                                className="px-2.5 py-1 rounded-xl bg-[#071B3E] hover:bg-[#0C2757] border border-blue-800 text-blue-200 font-bold text-[11px] cursor-pointer flex-1 text-center"
                               >
                                 🔍 View on Map
                               </button>
@@ -1776,7 +1911,7 @@ export function App() {
                                   );
                                   setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng });
                                 }}
-                                className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer"
+                                className="px-2.5 py-1 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-[11px] cursor-pointer flex-1 text-center"
                               >
                                 📍 Deploy {focusedMonitor.name.split(' ')[0]}
                               </button>
@@ -2108,14 +2243,20 @@ export function App() {
                         setNewOfficerCenterId(e.target.value);
                         if (ctr) setNewOfficerZone(ctr.zone);
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-bold"
+                      className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white font-bold text-xs"
                     >
-                      <option value="">Awaiting Examination Centers List</option>
-                      {Object.values(dbState.centers).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.code} — {c.name}
-                        </option>
-                      ))}
+                      <option value="">-- Select Exam Center ({allCentersList.length} Available) --</option>
+                      {Object.entries(centersGroupedByRegion)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([region, centersInRegion]) => (
+                          <optgroup key={region} label={`${region} (${centersInRegion.length})`}>
+                            {centersInRegion.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — {c.code}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
                     </select>
                   </div>
 
@@ -2269,15 +2410,25 @@ export function App() {
                           <select
                             aria-label="Edit Assigned Center"
                             value={editCenterId}
-                            onChange={(e) => setEditCenterId(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl bg-[#071B3E] border border-blue-700 text-white"
+                            onChange={(e) => {
+                              setEditCenterId(e.target.value);
+                              const ctr = dbState.centers[e.target.value];
+                              if (ctr) setEditZone(ctr.zone);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-[#071B3E] border border-blue-700 text-white text-xs font-bold"
                           >
-                            <option value="">Awaiting Centers List</option>
-                            {Object.values(dbState.centers).map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.code} — {c.name}
-                              </option>
-                            ))}
+                            <option value="">-- Select Exam Center ({allCentersList.length} Available) --</option>
+                            {Object.entries(centersGroupedByRegion)
+                              .sort(([a], [b]) => a.localeCompare(b))
+                              .map(([region, centersInRegion]) => (
+                                <optgroup key={region} label={`${region} (${centersInRegion.length})`}>
+                                  {centersInRegion.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name} — {c.code}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
                           </select>
                         </div>
                         <div>
@@ -3027,11 +3178,18 @@ export function App() {
                     }
                     className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/50 text-white text-xs font-bold"
                   >
-                    {Object.values(dbState.centers).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.code} — {c.name}
-                      </option>
-                    ))}
+                    <option value="">-- Select Exam Center ({allCentersList.length} Available) --</option>
+                    {Object.entries(centersGroupedByRegion)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([region, centersInRegion]) => (
+                        <optgroup key={region} label={`${region} (${centersInRegion.length})`}>
+                          {centersInRegion.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} — {c.code}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
                   </select>
                 )}
               </div>
