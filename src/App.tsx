@@ -52,6 +52,9 @@ import {
   Plus,
   Search,
   Filter,
+  Layers,
+  Globe,
+  Settings,
 } from 'lucide-react';
 import {
   SentinelDatabaseSchema,
@@ -311,6 +314,98 @@ export function App() {
   const [newCenterCandidates, setNewCenterCandidates] = useState<number>(450);
   const [newCenterPaper, setNewCenterPaper] = useState<string>('WASSCE-302-CORE-MATH');
   const [centerModalFeedback, setCenterModalFeedback] = useState<string | null>(null);
+
+  // Google Maps API & Engine Layer State
+  type MapLayerType = 'GOOGLE_HYBRID' | 'GOOGLE_ROADMAP' | 'GOOGLE_TERRAIN' | 'OSM';
+  const [mapLayerType, setMapLayerType] = useState<MapLayerType>(() => {
+    try {
+      return (localStorage.getItem('waec_map_layer_type') as MapLayerType) || 'GOOGLE_HYBRID';
+    } catch {
+      return 'GOOGLE_HYBRID';
+    }
+  });
+
+  const [googleMapsApiKey, setGoogleMapsApiKey] = useState<string>(() => {
+    try {
+      return (
+        import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+        localStorage.getItem('waec_google_maps_api_key') ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  });
+
+  const [isGoogleApiKeyModalOpen, setIsGoogleApiKeyModalOpen] = useState<boolean>(false);
+  const [tempApiKeyInput, setTempApiKeyInput] = useState<string>('');
+  const [googleApiModalFeedback, setGoogleApiModalFeedback] = useState<string | null>(null);
+  const [googleApiStatus, setGoogleApiStatus] = useState<'READY' | 'ACTIVE' | 'CUSTOM_KEY'>(() => {
+    try {
+      return (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || localStorage.getItem('waec_google_maps_api_key'))
+        ? 'CUSTOM_KEY'
+        : 'READY';
+    } catch {
+      return 'READY';
+    }
+  });
+
+  // Dynamic Tile Layer Configuration for Google Maps & OpenStreetMap
+  const mapTileConfig = useMemo(() => {
+    switch (mapLayerType) {
+      case 'GOOGLE_HYBRID':
+        return {
+          url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+          attribution: '&copy; Google Maps Satellite & Hybrid Imagery',
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        };
+      case 'GOOGLE_ROADMAP':
+        return {
+          url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+          attribution: '&copy; Google Maps Roads & Infrastructure',
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        };
+      case 'GOOGLE_TERRAIN':
+        return {
+          url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+          attribution: '&copy; Google Maps Terrain & Topography',
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        };
+      case 'OSM':
+      default:
+        return {
+          url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19,
+          subdomains: ['a', 'b', 'c'],
+        };
+    }
+  }, [mapLayerType]);
+
+  // Dynamically load Google Maps JavaScript API SDK if API Key provided
+  useEffect(() => {
+    if (!googleMapsApiKey) return;
+    const existingScript = document.getElementById('google-maps-js-sdk');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.id = 'google-maps-js-sdk';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+        googleMapsApiKey
+      )}&libraries=places,geometry`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setGoogleApiStatus('ACTIVE');
+      };
+      script.onerror = () => {
+        setGoogleApiStatus('READY');
+      };
+      document.head.appendChild(script);
+    }
+  }, [googleMapsApiKey]);
 
   // Examination Centers Search & Regional Filter State (305 Centers Registry)
   const [centerSearchQuery, setCenterSearchQuery] = useState<string>('');
@@ -1618,6 +1713,86 @@ export function App() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <div className="rounded-3xl overflow-hidden border-2 border-[#FFD700]/40 bg-[#071B3E] shadow-2xl h-[500px] relative">
+                  {/* FLOATING GOOGLE MAPS LAYER & ENGINE SWITCHER */}
+                  <div className="absolute top-3 right-3 z-[1000] flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-[#002147]/95 backdrop-blur-md border border-[#FFD700]/60 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMapLayerType('GOOGLE_HYBRID');
+                        try { localStorage.setItem('waec_map_layer_type', 'GOOGLE_HYBRID'); } catch(_) {}
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-[11px] cursor-pointer transition flex items-center gap-1.5 ${
+                        mapLayerType === 'GOOGLE_HYBRID'
+                          ? 'bg-[#FFD700] text-[#002147] shadow-md'
+                          : 'text-blue-200 hover:text-white hover:bg-blue-900/50'
+                      }`}
+                    >
+                      <span>🛰️</span> Google Satellite
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMapLayerType('GOOGLE_ROADMAP');
+                        try { localStorage.setItem('waec_map_layer_type', 'GOOGLE_ROADMAP'); } catch(_) {}
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-[11px] cursor-pointer transition flex items-center gap-1.5 ${
+                        mapLayerType === 'GOOGLE_ROADMAP'
+                          ? 'bg-[#FFD700] text-[#002147] shadow-md'
+                          : 'text-blue-200 hover:text-white hover:bg-blue-900/50'
+                      }`}
+                    >
+                      <span>🗺️</span> Google Road
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMapLayerType('GOOGLE_TERRAIN');
+                        try { localStorage.setItem('waec_map_layer_type', 'GOOGLE_TERRAIN'); } catch(_) {}
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-[11px] cursor-pointer transition flex items-center gap-1.5 ${
+                        mapLayerType === 'GOOGLE_TERRAIN'
+                          ? 'bg-[#FFD700] text-[#002147] shadow-md'
+                          : 'text-blue-200 hover:text-white hover:bg-blue-900/50'
+                      }`}
+                    >
+                      <span>🏔️</span> Terrain
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMapLayerType('OSM');
+                        try { localStorage.setItem('waec_map_layer_type', 'OSM'); } catch(_) {}
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-[11px] cursor-pointer transition flex items-center gap-1.5 ${
+                        mapLayerType === 'OSM'
+                          ? 'bg-[#FFD700] text-[#002147] shadow-md'
+                          : 'text-blue-200 hover:text-white hover:bg-blue-900/50'
+                      }`}
+                    >
+                      <span>🌐</span> OSM
+                    </button>
+
+                    <div className="h-5 w-[1px] bg-blue-700/60 mx-0.5" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempApiKeyInput(googleMapsApiKey);
+                        setGoogleApiModalFeedback(null);
+                        setIsGoogleApiKeyModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-[#030F26] hover:bg-[#07295A] border border-[#FFD700]/50 text-[#FFD700] font-mono text-[10px] font-bold cursor-pointer transition flex items-center gap-1"
+                      title="Google Maps API Key Configuration"
+                    >
+                      <span>⚙️ Google API</span>
+                      {googleMapsApiKey ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      )}
+                    </button>
+                  </div>
+
                   <MapContainer
                     center={[
                       mapFocusCoords ? mapFocusCoords.lat : focusedLocation.lat,
@@ -1627,8 +1802,11 @@ export function App() {
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
-                      attribution="&copy; OpenStreetMap contributors"
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      key={mapLayerType}
+                      attribution={mapTileConfig.attribution}
+                      url={mapTileConfig.url}
+                      maxZoom={mapTileConfig.maxZoom}
+                      subdomains={mapTileConfig.subdomains}
                     />
                     <MapRecenter
                       lat={mapFocusCoords ? mapFocusCoords.lat : focusedLocation.lat}
@@ -4015,14 +4193,39 @@ export function App() {
             </div>
 
             <div className="rounded-2xl overflow-hidden border-2 border-[#FFD700]/40 h-80 relative">
+              {/* MOBILE GOOGLE MAPS LAYER SWITCHER */}
+              <div className="absolute top-2.5 right-2.5 z-[1000] flex items-center gap-1 p-1 rounded-xl bg-[#002147]/95 backdrop-blur-md border border-[#FFD700]/60 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => setMapLayerType('GOOGLE_HYBRID')}
+                  className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold cursor-pointer transition ${
+                    mapLayerType === 'GOOGLE_HYBRID' ? 'bg-[#FFD700] text-[#002147]' : 'text-blue-200'
+                  }`}
+                >
+                  🛰️ Satellite
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapLayerType('GOOGLE_ROADMAP')}
+                  className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold cursor-pointer transition ${
+                    mapLayerType === 'GOOGLE_ROADMAP' ? 'bg-[#FFD700] text-[#002147]' : 'text-blue-200'
+                  }`}
+                >
+                  🗺️ Road
+                </button>
+              </div>
+
               <MapContainer
                 center={[currentLocation.lat, currentLocation.lng]}
                 zoom={13}
                 style={{ height: '100%', width: '100%' }}
               >
                 <TileLayer
-                  attribution="&copy; OpenStreetMap"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  key={mapLayerType}
+                  attribution={mapTileConfig.attribution}
+                  url={mapTileConfig.url}
+                  maxZoom={mapTileConfig.maxZoom}
+                  subdomains={mapTileConfig.subdomains}
                 />
                 <MapRecenter lat={currentLocation.lat} lng={currentLocation.lng} />
 
@@ -4395,6 +4598,136 @@ export function App() {
           <span>SOS Panic</span>
         </button>
       </nav>
+
+      {/* GOOGLE MAPS API & ENGINE SETTINGS MODAL */}
+      {isGoogleApiKeyModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-gradient-to-br from-[#071B3E] via-[#002147] to-[#030F26] border-2 border-[#FFD700] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-blue-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#FFD700] text-[#002147] flex items-center justify-center font-bold">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-black text-base text-white">
+                    Google Maps API Configuration
+                  </h3>
+                  <span className="text-[10px] font-mono text-emerald-300 font-bold">
+                    Real-Time Satellite &amp; Road Engine
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGoogleApiKeyModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-blue-900/60 hover:bg-blue-800 text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-blue-100">
+              <div className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 space-y-1.5">
+                <span className="text-[10px] font-mono font-bold text-[#FFD700] block uppercase">
+                  ACTIVE ENGINE STATUS
+                </span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    Google Maps Satellite &amp; Road Engine
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                    OPERATIONAL (READY)
+                  </span>
+                </div>
+                <p className="text-[11px] text-blue-300 leading-relaxed">
+                  Real-time Google Hybrid Satellite Imagery displays high-resolution physical school compounds, access roads, gates, and perimeters across Ghana without restrictions.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-white mb-1.5">
+                  Google Maps API Key (Optional / Institutional Key)
+                </label>
+                <input
+                  type="text"
+                  placeholder="AIzaSy..."
+                  value={tempApiKeyInput}
+                  onChange={(e) => setTempApiKeyInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#030F26] border border-blue-800 text-[#FFD700] font-mono text-xs focus:outline-none focus:border-[#FFD700]"
+                />
+                <span className="text-[10px] text-blue-300 mt-1 block">
+                  You can use your Google Cloud Maps JavaScript API Key for verified institutional quotas and places autocomplete.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-white mb-1.5">
+                  Default Map View Engine
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMapLayerType('GOOGLE_HYBRID')}
+                    className={`p-2.5 rounded-xl border text-left font-display font-extrabold text-xs cursor-pointer transition ${
+                      mapLayerType === 'GOOGLE_HYBRID'
+                        ? 'bg-[#FFD700] text-[#002147] border-[#FFD700]'
+                        : 'bg-[#030F26] text-white border-blue-800 hover:border-[#FFD700]/50'
+                    }`}
+                  >
+                    🛰️ Google Satellite (Hybrid)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapLayerType('GOOGLE_ROADMAP')}
+                    className={`p-2.5 rounded-xl border text-left font-display font-extrabold text-xs cursor-pointer transition ${
+                      mapLayerType === 'GOOGLE_ROADMAP'
+                        ? 'bg-[#FFD700] text-[#002147] border-[#FFD700]'
+                        : 'bg-[#030F26] text-white border-blue-800 hover:border-[#FFD700]/50'
+                    }`}
+                  >
+                    🗺️ Google Road Map
+                  </button>
+                </div>
+              </div>
+
+              {googleApiModalFeedback && (
+                <div className="p-2.5 rounded-xl bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs">
+                  {googleApiModalFeedback}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-blue-800">
+              <button
+                type="button"
+                onClick={() => setIsGoogleApiKeyModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-[#030F26] hover:bg-[#07295A] text-blue-200 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGoogleMapsApiKey(tempApiKeyInput.trim());
+                  try {
+                    localStorage.setItem('waec_google_maps_api_key', tempApiKeyInput.trim());
+                    localStorage.setItem('waec_map_layer_type', mapLayerType);
+                  } catch (_) {}
+                  setGoogleApiModalFeedback('Google Maps configuration successfully saved!');
+                  setTimeout(() => {
+                    setIsGoogleApiKeyModalOpen(false);
+                  }, 800);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-display font-black text-xs cursor-pointer shadow-md"
+              >
+                Save &amp; Apply Engine
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
