@@ -570,7 +570,28 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
     },
   },
   alerts: {},
-  geofence_logs: {},
+  geofence_logs: {
+    geo_init_1: {
+      id: 'geo_init_1',
+      officer_id: 'officer_001',
+      officer_name: 'Kwame Mensah',
+      center_id: 'center_achimota_senior_high',
+      center_name: 'Achimota Senior High',
+      event_type: 'ENTER_CENTER',
+      distance_meters: 0,
+      timestamp: Date.now() - 3600000,
+    },
+    geo_init_2: {
+      id: 'geo_init_2',
+      officer_id: 'officer_002',
+      officer_name: 'Kofi Asare',
+      center_id: 'center_adisadel_college',
+      center_name: 'Adisadel College',
+      event_type: 'ENTER_CENTER',
+      distance_meters: 0,
+      timestamp: Date.now() - 7200000,
+    },
+  },
   incidents: {},
   auth_audit_logs: {
     audit_init_1: {

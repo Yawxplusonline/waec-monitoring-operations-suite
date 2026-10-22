@@ -280,6 +280,8 @@ export function App() {
   const [newOfficerCenterId, setNewOfficerCenterId] = useState<string>('');
   const [newOfficerRouteId, setNewOfficerRouteId] = useState<string>('route_ACC_KOF');
   const [provisionFeedback, setProvisionFeedback] = useState<string | null>(null);
+  const [checkInFeedback, setCheckInFeedback] = useState<string | null>(null);
+  const [geofenceLogSearch, setGeofenceLogSearch] = useState<string>('');
 
   // Head of Department: Edit & Delete Field Monitor State
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
@@ -1381,8 +1383,7 @@ export function App() {
                   : 'bg-[#030F26] text-blue-200 hover:text-white border border-blue-900'
               }`}
             >
-              <Camera className="w-4 h-4" /> Center Check-Ins &amp; Evidence (
-              {allIncidents.length})
+              <Camera className="w-4 h-4" /> Center Check-Ins ({allGeofenceLogs.length}) &amp; Evidence ({allIncidents.length})
             </button>
           </div>
         </header>
@@ -2163,6 +2164,85 @@ export function App() {
                     })}
                   </div>
                 </div>
+                {/* LIVE AUTOMATED 100M EXAM CENTER CHECK-IN STREAM */}
+                <div className="p-4 rounded-3xl bg-[#071B3E] border border-blue-800 space-y-3 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
+                        GEOFENCE AUDIT STREAM
+                      </span>
+                      <h3 className="font-display font-black text-sm text-white flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-[#FFD700]" /> 100m Center Check-Ins ({allGeofenceLogs.length})
+                      </h3>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1 font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> LIVE
+                    </span>
+                  </div>
+
+                  {allGeofenceLogs.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-[#030F26] border border-blue-900 text-center text-xs text-blue-300">
+                      Awaiting automated 100m center arrival logs from field monitors.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                      {allGeofenceLogs.slice(0, 10).map((log) => {
+                        const logCenter = dbState.centers[log.center_id];
+                        return (
+                          <div
+                            key={log.id}
+                            className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900 hover:border-[#FFD700]/50 transition text-xs flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`font-mono font-bold text-[9px] px-1.5 py-0.5 rounded uppercase ${
+                                    log.event_type === 'ENTER_CENTER'
+                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  }`}
+                                >
+                                  {log.event_type === 'ENTER_CENTER' ? 'CHECKED IN' : 'DEPARTED'}
+                                </span>
+                                <strong className="text-white truncate">{log.officer_name}</strong>
+                              </div>
+                              <div className="text-[11px] text-blue-200 truncate mt-0.5 font-medium">
+                                {log.center_name} ({log.distance_meters}m)
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="font-mono text-[10px] text-[#FFD700] font-bold">
+                                {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </div>
+                              {logCenter && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMapFocusCoords({ lat: logCenter.lat, lng: logCenter.lng })}
+                                  className="text-[10px] text-blue-300 hover:text-[#FFD700] underline font-bold cursor-pointer"
+                                >
+                                  Focus Center
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="pt-1 border-t border-blue-900/60 flex items-center justify-between text-[11px]">
+                    <span className="text-blue-300">
+                      Total Geofence Logs: <strong className="text-white font-mono">{allGeofenceLogs.length}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHeadTab('COMMAND_EVIDENCE')}
+                      className="text-[#FFD700] hover:underline font-bold text-[10px] cursor-pointer"
+                    >
+                      View All in Vault →
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2767,31 +2847,88 @@ export function App() {
           {/* ============================================================== */}
           {headTab === 'COMMAND_EVIDENCE' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="p-5 rounded-3xl bg-[#071B3E] border border-[#FFD700]/30 space-y-3">
-                <h2 className="font-display text-base font-extrabold text-white flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-[#FFD700]" /> Automated 100m Exam Center
-                  Check-In Log
-                </h2>
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {allGeofenceLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className="p-3 rounded-2xl bg-[#030F26] border border-blue-900 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded mr-2 bg-emerald-500/20 text-emerald-300">
-                          {log.event_type}
-                        </span>
-                        <strong className="text-white">{log.officer_name}</strong>
-                        <div className="text-blue-200 text-[11px] mt-1">
-                          {log.center_name} ({log.distance_meters}m from center)
+              <div className="p-5 rounded-3xl bg-[#071B3E] border border-[#FFD700]/30 space-y-3.5 shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#FFD700] block">
+                      IMMUTABLE AUDIT TRAIL
+                    </span>
+                    <h2 className="font-display text-base font-extrabold text-white flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-[#FFD700]" /> Automated 100m Exam Center Check-In Log ({allGeofenceLogs.length})
+                    </h2>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950 px-2.5 py-1 rounded-full border border-emerald-400/40 flex items-center gap-1.5 font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /> Realtime Geofence Engine Active
+                  </span>
+                </div>
+
+                {/* Instant Search in Check-In Logs */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search check-in logs by officer name or school..."
+                    value={geofenceLogSearch}
+                    onChange={(e) => setGeofenceLogSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#030F26] border border-blue-800 text-white placeholder-blue-300 text-xs focus:outline-none focus:border-[#FFD700]"
+                  />
+                </div>
+
+                <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                  {allGeofenceLogs
+                    .filter((log) => {
+                      if (!geofenceLogSearch.trim()) return true;
+                      const q = geofenceLogSearch.toLowerCase();
+                      return (
+                        log.officer_name.toLowerCase().includes(q) ||
+                        log.center_name.toLowerCase().includes(q) ||
+                        log.event_type.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((log) => {
+                      const logCenter = dbState.centers[log.center_id];
+                      return (
+                        <div
+                          key={log.id}
+                          className="p-3.5 rounded-2xl bg-[#030F26] border border-blue-900 hover:border-[#FFD700]/50 transition flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded uppercase ${
+                                  log.event_type === 'ENTER_CENTER'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                                }`}
+                              >
+                                {log.event_type === 'ENTER_CENTER' ? 'CHECKED IN (100M)' : 'DEPARTED CENTER'}
+                              </span>
+                              <strong className="text-white text-sm truncate">{log.officer_name}</strong>
+                            </div>
+                            <div className="text-blue-200 text-xs mt-1 font-medium">
+                              {log.center_name} &bull; <span className="font-mono text-[#FFD700]">{log.distance_meters}m from center</span>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right space-y-1">
+                            <div className="font-mono text-xs text-[#FFD700] font-bold">
+                              {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </div>
+                            {logCenter && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMapFocusCoords({ lat: logCenter.lat, lng: logCenter.lng });
+                                  setHeadTab('COMMAND_MAP');
+                                }}
+                                className="text-[11px] text-blue-300 hover:text-[#FFD700] underline font-bold cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <MapPin className="w-3 h-3 text-[#FFD700]" /> Locate on Map
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <span className="font-mono text-[11px] text-[#FFD700]">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               </div>
 
@@ -3510,39 +3647,67 @@ export function App() {
 
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
+                  type="button"
                   onClick={() => {
-                    if (assignedCenter) {
-                      sentinelSync.updateOfficerLocation(currentOfficer.id, {
-                        lat: assignedCenter.lat,
-                        lng: assignedCenter.lng,
-                        speed: 1.2,
-                      });
+                    const log = sentinelSync.checkInOfficerAtCenter(
+                      currentOfficer.id,
+                      assignedCenter?.id
+                    );
+                    if (log) {
+                      setCheckInFeedback(
+                        `✅ 100m Check-In Verified: Arrived at ${log.center_name} at ${new Date(
+                          log.timestamp
+                        ).toLocaleTimeString()}! Broadcast live to Head of Department.`
+                      );
                     } else if (assignedOffice) {
                       sentinelSync.updateOfficerLocation(currentOfficer.id, {
                         lat: assignedOffice.lat,
                         lng: assignedOffice.lng,
                         speed: 1.2,
                       });
+                      setCheckInFeedback(
+                        `🏢 Arrived at WAEC Regional Base (${assignedOffice.name}). Location updated.`
+                      );
                     }
                   }}
-                  className="py-2 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5"
                 >
+                  <MapPin className="w-3.5 h-3.5 text-emerald-400" />
                   {assignedCenter ? '📍 Arrive at Exam Center' : '🏢 Arrive at WAEC Base'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
-                    const baseLat = assignedCenter ? assignedCenter.lat : (assignedOffice?.lat || currentLocation.lat);
-                    const baseLng = assignedCenter ? assignedCenter.lng : (assignedOffice?.lng || currentLocation.lng);
-                    sentinelSync.updateOfficerLocation(currentOfficer.id, {
-                      lat: baseLat + 0.003,
-                      lng: baseLng - 0.003,
-                      speed: 28.5,
-                    });
+                    const log = sentinelSync.departOfficerFromCenter(
+                      currentOfficer.id,
+                      assignedCenter?.id
+                    );
+                    if (log) {
+                      setCheckInFeedback(
+                        `🚗 Departed ${log.center_name} perimeter (>100m) at ${new Date(
+                          log.timestamp
+                        ).toLocaleTimeString()}. Exit event logged to Head of Department.`
+                      );
+                    }
                   }}
-                  className="py-2 px-3 rounded-xl bg-[#FFD700]/20 hover:bg-[#FFD700]/30 border border-[#FFD700]/50 text-[#FFD700] text-xs font-bold cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-[#FFD700]/20 hover:bg-[#FFD700]/30 border border-[#FFD700]/50 text-[#FFD700] text-xs font-bold cursor-pointer transition flex items-center justify-center gap-1.5"
                 >
+                  <Navigation className="w-3.5 h-3.5 text-[#FFD700]" />
                   🚗 Depart Perimeter (&gt;100m)
                 </button>
+
+                {checkInFeedback && (
+                  <div className="col-span-2 p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400 text-emerald-200 text-xs flex items-center justify-between gap-2">
+                    <span>{checkInFeedback}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCheckInFeedback(null)}
+                      className="text-emerald-400 hover:text-white text-xs font-bold shrink-0 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

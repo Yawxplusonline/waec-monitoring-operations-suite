@@ -23,8 +23,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v10';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v10';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v11';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v11';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -465,6 +465,121 @@ class RealtimeSyncEngine {
       },
       true
     );
+  }
+
+  /**
+   * Explicitly check in an officer at an exam center, creating a guaranteed ENTER_CENTER geofence log,
+   * updating their coordinates right to the center, and updating their daily work record check-in time.
+   */
+  public checkInOfficerAtCenter(officerId: string, centerId?: string): GeofenceEventLog | null {
+    const officer = this.state.officers[officerId];
+    if (!officer) return null;
+
+    const targetCenterId = centerId || officer.assigned_center_id;
+    const center =
+      (targetCenterId && this.state.centers[targetCenterId]) ||
+      Object.values(this.state.centers)[0];
+    if (!center) return null;
+
+    const now = Date.now();
+    const logId = `geo_${now}_${Math.random().toString(36).slice(2, 6)}`;
+    const logEntry: GeofenceEventLog = {
+      id: logId,
+      officer_id: officerId,
+      officer_name: officer.name,
+      center_id: center.id,
+      center_name: center.name,
+      event_type: 'ENTER_CENTER',
+      distance_meters: 0,
+      timestamp: now,
+    };
+
+    this.state.geofence_logs[logId] = logEntry;
+    this.lastCenterPresence[officerId] = center.id;
+
+    const currentLoc = this.state.live_locations[officerId] || {
+      lat: center.lat,
+      lng: center.lng,
+      heading: 0,
+      speed: 0,
+      battery: 90,
+      transit_mode: false,
+      updated_at: now,
+    };
+
+    this.state.live_locations[officerId] = {
+      ...currentLoc,
+      lat: center.lat,
+      lng: center.lng,
+      speed: 0.8,
+      stationary_since: now,
+      updated_at: now,
+    };
+
+    // Auto-update daily work record check-in time if today's record exists
+    const today = new Date().toISOString().split('T')[0];
+    const recId = `dwr_${officerId}_${today}`;
+    if (this.state.daily_work_records && this.state.daily_work_records[recId]) {
+      const rec = this.state.daily_work_records[recId];
+      if (rec.check_in_time === '--:--' || !rec.check_in_time) {
+        rec.check_in_time = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        rec.center_name = center.name;
+        rec.center_code = center.code;
+        rec.geofence_verified = true;
+        rec.updated_at = now;
+      }
+    }
+
+    this.commitState();
+    return logEntry;
+  }
+
+  /**
+   * Explicitly depart an officer from an exam center, creating a guaranteed EXIT_CENTER geofence log
+   * and moving coordinates outside the 100m perimeter.
+   */
+  public departOfficerFromCenter(officerId: string, centerId?: string): GeofenceEventLog | null {
+    const officer = this.state.officers[officerId];
+    if (!officer) return null;
+
+    const currentPresenceId = this.lastCenterPresence[officerId] || centerId || officer.assigned_center_id;
+    const center = currentPresenceId ? this.state.centers[currentPresenceId] : null;
+
+    const now = Date.now();
+    const logId = `geo_${now}_${Math.random().toString(36).slice(2, 6)}`;
+    const logEntry: GeofenceEventLog = {
+      id: logId,
+      officer_id: officerId,
+      officer_name: officer.name,
+      center_id: center ? center.id : 'center_general',
+      center_name: center ? center.name : 'Examination Center Perimeter',
+      event_type: 'EXIT_CENTER',
+      distance_meters: 140,
+      timestamp: now,
+    };
+
+    this.state.geofence_logs[logId] = logEntry;
+    this.lastCenterPresence[officerId] = null;
+
+    const currentLoc = this.state.live_locations[officerId];
+    const baseLat = center ? center.lat : (currentLoc ? currentLoc.lat : 5.6037);
+    const baseLng = center ? center.lng : (currentLoc ? currentLoc.lng : -0.187);
+
+    this.state.live_locations[officerId] = {
+      ...(currentLoc || {
+        heading: 45,
+        battery: 88,
+        transit_mode: true,
+      }),
+      lat: baseLat + 0.0025,
+      lng: baseLng - 0.0025,
+      speed: 28.5,
+      stationary_since: undefined,
+      updated_at: now,
+    };
+
+    this.commitState();
+    return logEntry;
   }
 
   public deleteExamCenter(centerId: string) {
@@ -1131,7 +1246,7 @@ class RealtimeSyncEngine {
       const nowCenterId = insideCenter ? insideCenter.id : null;
 
       if (nowCenterId && nowCenterId !== prevCenterId && insideCenter) {
-        const logId = `geo_${now}`;
+        const logId = `geo_${now}_${Math.random().toString(36).slice(2, 6)}`;
         const logEntry: GeofenceEventLog = {
           id: logId,
           officer_id: officerId,
@@ -1139,14 +1254,28 @@ class RealtimeSyncEngine {
           center_id: insideCenter.id,
           center_name: insideCenter.name,
           event_type: 'ENTER_CENTER',
-          distance_meters: nearestDistance,
+          distance_meters: Math.round(nearestDistance),
           timestamp: now,
         };
         this.state.geofence_logs[logId] = logEntry;
+
+        // Auto-update daily work record check_in_time if record exists
+        const today = new Date().toISOString().split('T')[0];
+        const recId = `dwr_${officerId}_${today}`;
+        if (this.state.daily_work_records && this.state.daily_work_records[recId]) {
+          const rec = this.state.daily_work_records[recId];
+          if (rec.check_in_time === '--:--' || !rec.check_in_time) {
+            rec.check_in_time = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            rec.center_name = insideCenter.name;
+            rec.center_code = insideCenter.code;
+            rec.geofence_verified = true;
+            rec.updated_at = now;
+          }
+        }
       } else if (!nowCenterId && prevCenterId) {
         const exitedCenter = this.state.centers[prevCenterId] || nearestCenter;
         if (exitedCenter) {
-          const logId = `geo_${now}`;
+          const logId = `geo_${now}_${Math.random().toString(36).slice(2, 6)}`;
           const logEntry: GeofenceEventLog = {
             id: logId,
             officer_id: officerId,
@@ -1154,7 +1283,7 @@ class RealtimeSyncEngine {
             center_id: exitedCenter.id,
             center_name: exitedCenter.name,
             event_type: 'EXIT_CENTER',
-            distance_meters: nearestDistance,
+            distance_meters: Math.round(nearestDistance),
             timestamp: now,
           };
           this.state.geofence_logs[logId] = logEntry;
