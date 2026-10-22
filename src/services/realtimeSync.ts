@@ -23,8 +23,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v11';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v11';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v12';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v12';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -758,9 +758,15 @@ class RealtimeSyncEngine {
     options?: SafeDevicePreFlightOptions
   ): { success: boolean; officer?: OfficerProfile; error?: string; computedHash?: string } {
     const normalizedPhone = phone.replace(/\s+/g, '');
-    const officer = Object.values(this.state.officers).find(
-      (o) => o.phone.replace(/\s+/g, '') === normalizedPhone || o.id === normalizedPhone
-    );
+    const normalizedDigits = phone.replace(/\D/g, '').replace(/^233/, '0');
+    const officer = Object.values(this.state.officers).find((o) => {
+      const oDigits = o.phone.replace(/\D/g, '').replace(/^233/, '0');
+      return (
+        o.phone.replace(/\s+/g, '') === normalizedPhone ||
+        o.id === normalizedPhone ||
+        (normalizedDigits.length >= 9 && oDigits === normalizedDigits)
+      );
+    });
 
     if (!officer) {
       return {

@@ -629,8 +629,8 @@ export function App() {
       setLoginPhone('+233200000001');
       setLoginPin('1234');
     } else {
-      setLoginPhone('+233200000000');
-      setLoginPin('0000');
+      setLoginPhone('0533960336');
+      setLoginPin('0101');
     }
   };
 
@@ -638,9 +638,15 @@ export function App() {
     if (e) e.preventDefault();
     setLoginError(null);
 
-    const matchedOfficer = Object.values(dbState.officers).find(
-      (o) => o.phone.replace(/\s+/g, '') === loginPhone.replace(/\s+/g, '')
-    );
+    const normPhone = (p: string) => p.replace(/\D/g, '').replace(/^233/, '0');
+    const matchedOfficer = Object.values(dbState.officers).find((o) => {
+      const oNorm = normPhone(o.phone);
+      const lNorm = normPhone(loginPhone);
+      return (
+        o.phone.replace(/\s+/g, '') === loginPhone.replace(/\s+/g, '') ||
+        (lNorm.length >= 9 && oNorm === lNorm)
+      );
+    });
 
     if (matchedOfficer) {
       const isOfficerHod = matchedOfficer.role === 'Head of Monitoring Team';
