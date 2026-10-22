@@ -181,8 +181,7 @@ export const AdminWhitelistManager: React.FC<AdminWhitelistManagerProps> = ({
                   className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white"
                 >
                   <option value="Field Monitoring Officer">Field Monitoring Officer</option>
-                  <option value="Paper Escort Lead">Paper Escort Lead</option>
-                  <option value="Depot / Escort Supervisor">Depot / Escort Supervisor</option>
+                  <option value="Head of Monitoring Team">Head of Monitoring Team</option>
                 </select>
               </div>
               <div>

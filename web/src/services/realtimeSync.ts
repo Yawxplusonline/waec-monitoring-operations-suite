@@ -1721,7 +1721,7 @@ class RealtimeSyncEngine {
       this.state.officers[id] = {
         id,
         name: `${name} (#${i})`,
-        role: isEscort ? 'Paper Escort Lead' : 'Field Monitoring Officer',
+        role: 'Field Monitoring Officer',
         phone,
         pin_demo: pin,
         pin_hash: computePinHash(phone, pin),

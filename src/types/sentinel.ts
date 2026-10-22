@@ -23,9 +23,7 @@ export interface BackgroundEngineMetrics {
 
 export type UserRole =
   | 'Head of Monitoring Team'
-  | 'Field Monitoring Officer'
-  | 'Paper Escort Lead'
-  | 'Depot / Escort Supervisor';
+  | 'Field Monitoring Officer';
 
 export interface OfficerProfile {
   id: string;

@@ -217,7 +217,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
     officer_002: {
       id: 'officer_002',
       name: 'Ama Osei-Bonsu',
-      role: 'Paper Escort Lead',
+      role: 'Field Monitoring Officer',
       phone: '+233240000002',
       pin_demo: '2468',
       pin_hash: computePinHash('+233240000002', '2468'),
@@ -649,7 +649,7 @@ export const INITIAL_SEED_DATA: SentinelDatabaseSchema = {
       officer_id: 'officer_002',
       officer_name: 'Ama Osei-Bonsu',
       officer_phone: '+233240000002',
-      officer_role: 'Paper Escort Lead',
+      officer_role: 'Field Monitoring Officer',
       officer_avatar_url: buildOfficialWaecAvatar('AO', '#0A2E5C', '#FFD700'),
       center_id: '',
       center_code: 'CPC-DISPATCH',

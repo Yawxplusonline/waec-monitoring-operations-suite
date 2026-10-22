@@ -1069,7 +1069,7 @@ export function App() {
                   loginSection === 'FIELD_MONITOR' ? 'text-[#002147]/80' : 'text-blue-300/60'
                 }`}
               >
-                Field Officers &amp; Paper Escorts
+                Field Monitors Officers
               </span>
             </button>
 
@@ -2616,7 +2616,6 @@ export function App() {
                       <option value="Field Monitoring Officer">
                         Field Monitoring Officer
                       </option>
-                      <option value="Paper Escort Lead">Paper Escort Lead</option>
                       <option value="Head of Monitoring Team">
                         Head of Monitoring Team (HOD)
                       </option>
@@ -2790,7 +2789,6 @@ export function App() {
                             <option value="Field Monitoring Officer">
                               Field Monitoring Officer
                             </option>
-                            <option value="Paper Escort Lead">Paper Escort Lead</option>
                             <option value="Head of Monitoring Team">
                               Head of Monitoring Team (HOD)
                             </option>
@@ -3695,12 +3693,12 @@ export function App() {
                   </span>
                 </div>
                 <div className="font-display font-extrabold text-sm text-white mt-2">
-                  Paper Escort Mode
+                  Transit &amp; Inspection Mode
                 </div>
                 <div className="text-[11px] opacity-80 mt-0.5">
                   {currentLocation.transit_mode
-                    ? '200m route corridor active'
-                    : 'Tap when escorting papers'}
+                    ? 'Active transit to exam center (1.0s telemetry)'
+                    : 'Stationary inspection at center'}
                 </div>
               </button>
             </div>
@@ -4571,7 +4569,7 @@ export function App() {
           }`}
         >
           <MapPin className="w-4 h-4 mb-0.5" />
-          <span>Escort Map</span>
+          <span>Exam Map</span>
         </button>
 
         <button
