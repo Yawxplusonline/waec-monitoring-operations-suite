@@ -181,6 +181,7 @@ type OfficerTab =
 type HeadTab =
   | 'HOD_WORK_RECORDS'
   | 'COMMAND_MAP'
+  | 'COMMAND_SQUADS'
   | 'COMMAND_SOS'
   | 'COMMAND_WHITELIST'
   | 'COMMAND_EVIDENCE';
@@ -285,6 +286,9 @@ export function App() {
   const [provisionFeedback, setProvisionFeedback] = useState<string | null>(null);
   const [checkInFeedback, setCheckInFeedback] = useState<string | null>(null);
   const [geofenceLogSearch, setGeofenceLogSearch] = useState<string>('');
+  const [squadRegionFilter, setSquadRegionFilter] = useState<string>('ALL');
+  const [expandedSquadCenters, setExpandedSquadCenters] = useState<Record<string, boolean>>({});
+  const [squadCenterSearch, setSquadCenterSearch] = useState<Record<string, string>>({});
 
   // Head of Department: Edit & Delete Field Monitor State
   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
@@ -1454,6 +1458,18 @@ export function App() {
             </button>
 
             <button
+              onClick={() => setHeadTab('COMMAND_SQUADS')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-display font-extrabold transition cursor-pointer ${
+                headTab === 'COMMAND_SQUADS'
+                  ? 'bg-[#FFD700] text-[#002147] shadow-lg'
+                  : 'bg-[#030F26] text-blue-200 hover:text-white border border-blue-900'
+              }`}
+            >
+              <Users className="w-4 h-4" /> Regional Squads (Units of 4) (
+              {Object.keys(dbState.regional_squads || {}).length})
+            </button>
+
+            <button
               onClick={() => setHeadTab('COMMAND_SOS')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-display font-extrabold transition cursor-pointer ${
                 headTab === 'COMMAND_SOS'
@@ -2289,9 +2305,16 @@ export function App() {
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className="font-display font-extrabold text-xs text-white truncate">
-                                {monitor.name}
-                              </span>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <span className="font-display font-extrabold text-xs text-white truncate">
+                                  {monitor.name}
+                                </span>
+                                {monitor.group_role === 'Group Leader' && (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#FFD700] text-[#002147] font-black shrink-0">
+                                    👑 LEADER
+                                  </span>
+                                )}
+                              </div>
                               <span
                                 className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
                                   monitor.status === 'SOS'
@@ -2304,8 +2327,11 @@ export function App() {
                                 {monitor.status}
                               </span>
                             </div>
+                            <div className="text-[10px] font-mono text-[#FFD700] truncate mt-0.5">
+                              {monitor.group_name || 'Regional Squad'} ({monitor.assigned_region || 'Ghana'})
+                            </div>
                             <div className="text-[11px] font-mono text-blue-200 truncate">
-                              {monitor.phone} • {center?.code || 'GH-042'}
+                              {monitor.phone} • {center?.code || monitor.staff_badge_no || 'WAEC'}
                             </div>
                             <div className="flex items-center justify-between text-[10px] font-mono text-[#FFD700] mt-1">
                               <span>🚗 {loc ? `${loc.speed.toFixed(1)} km/h` : '0 km/h'}</span>
@@ -2427,6 +2453,355 @@ export function App() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* HOD TAB: REGIONAL MONITORING SQUADS (UNITS OF 4 OFFICERS)     */}
+          {/* ============================================================== */}
+          {headTab === 'COMMAND_SQUADS' && (
+            <div className="space-y-6">
+              {/* Squads Command Banner */}
+              <div className="p-6 rounded-3xl bg-gradient-to-r from-[#002147] via-[#07295A] to-[#002147] border-2 border-[#FFD700]/50 shadow-2xl relative overflow-hidden">
+                <div className="flex flex-wrap items-center justify-between gap-4 relative z-10">
+                  <div className="space-y-1.5 max-w-2xl">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/40 text-[#FFD700] text-xs font-mono font-bold uppercase tracking-wider">
+                      <Award className="w-3.5 h-3.5" /> WAEC Operational Deployment
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-display font-black text-white">
+                      Regional Monitoring Squads (Units of 4)
+                    </h2>
+                    <p className="text-xs sm:text-sm text-blue-200 leading-relaxed font-sans">
+                      Field Monitoring Officers operate in synchronized groups of 4 (1 Group Leader + 3 Members) assigned on a regional basis. <strong className="text-[#FFD700]">Every examination center within each assigned region is actively monitored by that regional squad unit.</strong>
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 rounded-2xl bg-[#030F26]/90 border border-blue-900 text-center">
+                      <div className="text-[10px] font-mono uppercase text-blue-300">Total Squads</div>
+                      <div className="text-xl font-display font-black text-[#FFD700]">
+                        {Object.keys(dbState.regional_squads || {}).length}
+                      </div>
+                      <div className="text-[9px] font-mono text-emerald-400 font-bold">4 Units Active</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-[#030F26]/90 border border-blue-900 text-center">
+                      <div className="text-[10px] font-mono uppercase text-blue-300">Squad Officers</div>
+                      <div className="text-xl font-display font-black text-white">
+                        {fieldMonitors.length}
+                      </div>
+                      <div className="text-[9px] font-mono text-blue-300">4 per Unit</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-[#030F26]/90 border border-blue-900 text-center">
+                      <div className="text-[10px] font-mono uppercase text-blue-300">Regions Covered</div>
+                      <div className="text-xl font-display font-black text-[#FFD700]">
+                        {Array.from(new Set(Object.values(dbState.regional_squads || {}).map((s) => s.region))).length}
+                      </div>
+                      <div className="text-[9px] font-mono text-blue-300">Regional Bases</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-[#030F26]/90 border border-blue-900 text-center">
+                      <div className="text-[10px] font-mono uppercase text-blue-300">Total Centers</div>
+                      <div className="text-xl font-display font-black text-emerald-400">
+                        {Object.keys(dbState.centers).length}
+                      </div>
+                      <div className="text-[9px] font-mono text-blue-300">100m Geofenced</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Region Filter Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-mono font-bold text-blue-300 mr-1">Filter Region:</span>
+                <button
+                  type="button"
+                  onClick={() => setSquadRegionFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-xs cursor-pointer transition ${
+                    squadRegionFilter === 'ALL'
+                      ? 'bg-[#FFD700] text-[#002147] shadow'
+                      : 'bg-[#071B3E] text-blue-200 border border-blue-900 hover:text-white'
+                  }`}
+                >
+                  All Regional Squads ({Object.keys(dbState.regional_squads || {}).length})
+                </button>
+                {Object.values(dbState.regional_squads || {}).map((squad) => (
+                  <button
+                    key={squad.id}
+                    type="button"
+                    onClick={() => setSquadRegionFilter(squad.region)}
+                    className={`px-3 py-1.5 rounded-xl font-display font-extrabold text-xs cursor-pointer transition ${
+                      squadRegionFilter === squad.region
+                        ? 'bg-[#FFD700] text-[#002147] shadow'
+                        : 'bg-[#071B3E] text-blue-200 border border-blue-900 hover:text-white'
+                    }`}
+                  >
+                    {squad.region}
+                  </button>
+                ))}
+              </div>
+
+              {/* Regional Squads Cards Grid */}
+              <div className="space-y-6">
+                {Object.values(dbState.regional_squads || {})
+                  .filter((squad) => squadRegionFilter === 'ALL' || squad.region === squadRegionFilter)
+                  .map((squad) => {
+                    const squadMembersInfo = sentinelSync.getSquadMembers(squad.id);
+                    const regionalCenters = sentinelSync.getCentersForRegion(squad.region);
+                    const isCentersExpanded = Boolean(expandedSquadCenters[squad.id]);
+                    const query = (squadCenterSearch[squad.id] || '').toLowerCase();
+                    const filteredCenters = regionalCenters.filter(
+                      (c) =>
+                        c.name.toLowerCase().includes(query) ||
+                        c.code.toLowerCase().includes(query) ||
+                        (c.zone || '').toLowerCase().includes(query)
+                    );
+                    const activeLeader = squadMembersInfo.leader;
+                    const members = squadMembersInfo.members;
+                    const squadOffice = squad.assigned_office_id ? dbState.waec_offices?.[squad.assigned_office_id] : null;
+
+                    return (
+                      <div
+                        key={squad.id}
+                        className="rounded-3xl bg-[#071B3E] border-2 border-blue-900/80 shadow-2xl p-5 space-y-5"
+                      >
+                        {/* Squad Card Header */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-blue-900/70">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-display font-black text-lg text-white">
+                                {squad.name}
+                              </h3>
+                              <span className="px-2.5 py-0.5 rounded-full bg-[#FFD700] text-[#002147] text-[10px] font-extrabold uppercase font-mono shadow-sm">
+                                {squad.region} Region
+                              </span>
+                            </div>
+                            <p className="text-xs font-mono text-blue-200 mt-0.5">
+                              Base: <strong className="text-white">{squadOffice ? squadOffice.name : 'WAEC Regional Depot'}</strong> • Vehicle: <strong className="text-[#FFD700]">{squad.vehicle_badge || 'WAEC-PATROL-01'}</strong>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-mono font-bold text-xs flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              4/4 Officers Active
+                            </span>
+                            <span className="px-3 py-1 rounded-xl bg-blue-900/60 border border-blue-700/60 text-blue-200 font-mono font-bold text-xs">
+                              {regionalCenters.length} Centers Monitored
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 4 OFFICERS IN THIS REGIONAL SQUAD */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <span className="text-xs font-display font-extrabold text-[#FFD700] uppercase tracking-wider flex items-center gap-1.5">
+                              <Users className="w-4 h-4" /> 4-Officer Operational Unit (1 Group Leader + 3 Members)
+                            </span>
+                            <span className="text-[11px] font-mono text-blue-300">
+                              Direct Communication &amp; Live Tracking
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {/* Officer 1: Group Leader */}
+                            {activeLeader ? (
+                              <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#0C2757] via-[#091E44] to-[#04122C] border-2 border-[#FFD700] shadow-lg space-y-2 relative">
+                                <div className="flex items-center justify-between">
+                                  <span className="px-2 py-0.5 rounded-full bg-[#FFD700] text-[#002147] font-extrabold font-mono text-[10px] flex items-center gap-1 shadow">
+                                    👑 GROUP LEADER
+                                  </span>
+                                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${activeLeader.on_shift ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                                    {activeLeader.status}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <img
+                                    src={activeLeader.avatar_url}
+                                    alt={activeLeader.name}
+                                    className="w-12 h-12 rounded-full border-2 border-[#FFD700] object-cover shrink-0 shadow"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-display font-black text-sm text-white truncate">
+                                      {activeLeader.name}
+                                    </div>
+                                    <div className="text-[11px] font-mono text-[#FFD700] font-bold truncate">
+                                      {activeLeader.staff_badge_no || 'WAEC-LEAD'}
+                                    </div>
+                                    <div className="text-[10px] font-mono text-blue-200 truncate">
+                                      {activeLeader.phone}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="pt-1.5 border-t border-blue-900/60 flex items-center justify-between text-[10px] font-mono text-blue-200">
+                                  <a
+                                    href={`tel:${activeLeader.phone}`}
+                                    className="px-2.5 py-1 rounded-lg bg-[#FFD700] hover:bg-[#F4C430] text-[#002147] font-bold flex items-center gap-1"
+                                  >
+                                    <PhoneCall className="w-3 h-3" /> Call Leader
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedMonitorId(activeLeader.id);
+                                      setHeadTab('COMMAND_MAP');
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-[#071B3E] hover:bg-[#0C2757] text-blue-200 border border-blue-800 font-bold"
+                                  >
+                                    Map Track
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3.5 rounded-2xl bg-[#030F26] border border-dashed border-[#FFD700]/50 text-center flex flex-col items-center justify-center text-xs text-[#FFD700]">
+                                <span>No Group Leader Assigned</span>
+                              </div>
+                            )}
+
+                            {/* Officers 2, 3, 4: Members */}
+                            {members.map((member, idx) => {
+                              return (
+                                <div
+                                  key={member.id}
+                                  className="p-3.5 rounded-2xl bg-[#030F26] border border-blue-900 hover:border-blue-700 transition space-y-2"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-200 font-bold font-mono text-[10px]">
+                                      🛡️ MEMBER #{idx + 1}
+                                    </span>
+                                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${member.on_shift ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                                      {member.status}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-3">
+                                    <img
+                                      src={member.avatar_url}
+                                      alt={member.name}
+                                      className="w-11 h-11 rounded-full border border-blue-700 object-cover shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-display font-extrabold text-sm text-white truncate">
+                                        {member.name}
+                                      </div>
+                                      <div className="text-[11px] font-mono text-blue-300 truncate">
+                                        {member.staff_badge_no || 'WAEC-FM'}
+                                      </div>
+                                      <div className="text-[10px] font-mono text-blue-200 truncate">
+                                        {member.phone}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-1.5 border-t border-blue-900/60 flex items-center justify-between text-[10px] font-mono text-blue-200">
+                                    <a
+                                      href={`tel:${member.phone}`}
+                                      className="px-2.5 py-1 rounded-lg bg-[#071B3E] hover:bg-[#0C2757] text-[#FFD700] border border-[#FFD700]/30 font-bold flex items-center gap-1"
+                                    >
+                                      <PhoneCall className="w-3 h-3" /> Call
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedMonitorId(member.id);
+                                        setHeadTab('COMMAND_MAP');
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-[#071B3E] hover:bg-[#0C2757] text-blue-200 border border-blue-800 font-bold"
+                                    >
+                                      Map Track
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* REGIONAL EXAMINATION CENTERS SURVEILLANCE PANEL */}
+                        <div className="p-4 rounded-2xl bg-[#030F26] border border-blue-900/80 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="font-display font-bold text-sm text-white flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-[#FFD700]" />
+                                <span>Examination Centers in {squad.region} Region ({regionalCenters.length} Centers)</span>
+                              </div>
+                              <p className="text-xs text-blue-300 font-sans mt-0.5">
+                                Every center in {squad.region} is covered by {squad.name}. Automated 100m geofence active for all 4 officers.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedSquadCenters((prev) => ({
+                                  ...prev,
+                                  [squad.id]: !prev[squad.id],
+                                }))
+                              }
+                              className="px-3.5 py-1.5 rounded-xl bg-[#0C2757] hover:bg-[#123675] border border-[#FFD700]/40 text-[#FFD700] font-display font-extrabold text-xs cursor-pointer shadow transition"
+                            >
+                              {isCentersExpanded ? '▲ Hide Centers List' : `▼ View All ${regionalCenters.length} Centers`}
+                            </button>
+                          </div>
+
+                          {/* Expanded Centers View */}
+                          {isCentersExpanded && (
+                            <div className="space-y-3 pt-2 border-t border-blue-900/60">
+                              <input
+                                type="text"
+                                placeholder={`Search centers in ${squad.region} by school name or code...`}
+                                value={squadCenterSearch[squad.id] || ''}
+                                onChange={(e) =>
+                                  setSquadCenterSearch((prev) => ({
+                                    ...prev,
+                                    [squad.id]: e.target.value,
+                                  }))
+                                }
+                                className="w-full px-3 py-2 rounded-xl bg-[#071B3E] border border-blue-800 text-white text-xs placeholder-blue-300/50"
+                              />
+
+                              <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                                {filteredCenters.map((ctr) => {
+                                  return (
+                                    <div
+                                      key={ctr.id}
+                                      className="p-2.5 rounded-xl bg-[#071B3E] border border-blue-900/70 flex flex-wrap items-center justify-between gap-2 text-xs"
+                                    >
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-[#FFD700] text-[#002147]">
+                                            {ctr.code}
+                                          </span>
+                                          <span className="font-display font-bold text-white">
+                                            {ctr.name}
+                                          </span>
+                                        </div>
+                                        <div className="text-[11px] text-blue-200 mt-0.5 font-medium">
+                                          {ctr.zone} • {ctr.candidates_count} Candidates • 100m Radius
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMapFocusCoords({ lat: ctr.lat, lng: ctr.lng });
+                                          setHeadTab('COMMAND_MAP');
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-[#0C2757] hover:bg-[#FFD700] text-blue-200 hover:text-[#002147] font-bold text-[11px] transition cursor-pointer"
+                                      >
+                                        🔍 Focus on Map
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -3304,6 +3679,12 @@ export function App() {
   // SCREEN 2B: AUTHENTICATED FIELD MONITORING OFFICER MOBILE APP
   // (WITH PROFILE PICTURE UPLOAD & EVERYDAY WORK RECORDS LOGBOOK)
   // ==========================================================================
+  const mySquad = sentinelSync.getSquadForOfficer(currentOfficer.id);
+  const mySquadMembersInfo = mySquad ? sentinelSync.getSquadMembers(mySquad.id) : null;
+  const isSquadLeader = currentOfficer.group_role === 'Group Leader' || mySquad?.leader_id === currentOfficer.id;
+  const myRegion = currentOfficer.assigned_region || mySquad?.region || 'Greater Accra';
+  const myRegionalCenters = sentinelSync.getCentersForRegion(myRegion);
+
   const assignedOffice =
     (currentOfficer.assigned_office_id && dbState.waec_offices?.[currentOfficer.assigned_office_id]) ||
     (dbState.waec_offices ? Object.values(dbState.waec_offices)[0] : null);
@@ -3414,6 +3795,98 @@ export function App() {
         {/* ================================================================ */}
         {activeTab === 'PATROL' && (
           <>
+            {/* REGIONAL MONITORING SQUAD (UNIT OF 4 OFFICERS) */}
+            <div className="p-4 rounded-3xl bg-gradient-to-br from-[#08204D] via-[#051838] to-[#020B1C] border-2 border-[#FFD700]/60 shadow-xl space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono font-extrabold uppercase tracking-widest text-[#FFD700] flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-[#FFD700]" /> Regional Monitoring Squad (Unit of 4)
+                </span>
+                <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1 ${
+                  isSquadLeader
+                    ? 'bg-[#FFD700] text-[#002147] shadow'
+                    : 'bg-blue-600/30 text-blue-200 border border-blue-400/50'
+                }`}>
+                  {isSquadLeader ? '👑 GROUP LEADER' : '🛡️ SQUAD MEMBER'}
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-display font-black text-lg text-white">
+                  {mySquad?.name || `${myRegion} Regional Squad`}
+                </h3>
+                <p className="text-xs text-blue-200 font-mono mt-0.5">
+                  Assigned Region: <strong className="text-[#FFD700]">{myRegion}</strong> • Vehicle: <strong className="text-white">{mySquad?.vehicle_badge || 'WAEC-PATROL-01'}</strong>
+                </p>
+                <div className="mt-1.5 p-2.5 rounded-xl bg-[#002147]/80 border border-blue-800/80 text-[11px] text-blue-200 leading-relaxed">
+                  📍 <strong>Regional Assignment:</strong> Every examination center in <span className="text-[#FFD700] font-bold">{myRegion} Region ({myRegionalCenters.length} Centers)</span> is actively monitored by your 4-officer unit.
+                </div>
+              </div>
+
+              {/* 4 Squad Officers Grid */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-mono font-bold uppercase text-blue-300">
+                  Unit of 4 Field Officers:
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(mySquadMembersInfo?.all || [currentOfficer]).map((officer) => {
+                    const isLeader = officer.id === mySquad?.leader_id || officer.group_role === 'Group Leader';
+                    const isSelf = officer.id === currentOfficer.id;
+                    const officerLoc = dbState.live_locations[officer.id];
+                    return (
+                      <div
+                        key={officer.id}
+                        className={`p-2 rounded-2xl border transition flex items-center gap-2 ${
+                          isSelf
+                            ? 'bg-[#0E356A]/80 border-[#FFD700]'
+                            : isLeader
+                            ? 'bg-[#09224E] border-[#FFD700]/50'
+                            : 'bg-[#030F26] border-blue-900/80'
+                        }`}
+                      >
+                        <div className="relative shrink-0">
+                          <img
+                            src={officer.avatar_url}
+                            alt={officer.name}
+                            className="w-9 h-9 rounded-full border border-[#FFD700] object-cover"
+                          />
+                          {isLeader && (
+                            <span className="absolute -top-1.5 -right-1 text-[11px]">👑</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="font-display font-bold text-[11px] text-white truncate">
+                              {officer.name}
+                            </span>
+                            {isSelf && (
+                              <span className="text-[9px] font-mono text-[#FFD700] font-bold">(You)</span>
+                            )}
+                          </div>
+                          <div className="text-[9px] font-mono text-blue-300 truncate">
+                            {isLeader ? 'Leader' : 'Member'} • {officer.staff_badge_no || 'WAEC'}
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] font-mono mt-0.5">
+                            <span className={officer.on_shift ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
+                              {officer.on_shift ? (officerLoc?.transit_mode ? '🚗 In Transit' : '🟢 Active') : '⚪ Off-duty'}
+                            </span>
+                            {!isSelf && (
+                              <a
+                                href={`tel:${officer.phone}`}
+                                className="text-[#FFD700] hover:underline flex items-center gap-0.5"
+                                title={`Call ${officer.name}`}
+                              >
+                                <PhoneCall className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* OFFICIAL WAEC FIELD MONITOR PROFILE PICTURE & DIGITAL ID SECTION */}
             <div className="p-4 rounded-3xl bg-gradient-to-br from-[#071B3E] via-[#002147] to-[#04122C] border-2 border-[#FFD700]/45 shadow-xl space-y-3">
               <div className="flex items-center justify-between">
@@ -3789,9 +4262,14 @@ export function App() {
 
               {/* Deployed Examination Center Selector */}
               <div className="pt-1">
-                <label className="block text-[10px] font-mono uppercase text-blue-300 mb-1">
-                  Deployed Examination Center (100m Geofence):
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-mono uppercase text-blue-300">
+                    Deployed Examination Center ({myRegion}: {myRegionalCenters.length} Centers Monitored):
+                  </label>
+                  <span className="text-[10px] font-mono text-[#FFD700] font-bold">
+                    Unit of 4 Regional Surveillance
+                  </span>
+                </div>
                 {Object.keys(dbState.centers).length === 0 ? (
                   <div className="p-2.5 rounded-xl bg-[#030F26] border border-blue-900 text-[11px] text-blue-200 flex items-center justify-between">
                     <span>Awaiting examination centers list upload</span>
@@ -3809,13 +4287,21 @@ export function App() {
                         e.target.value
                       )
                     }
-                    className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/50 text-white text-xs font-bold"
+                    className="w-full px-3 py-2 rounded-xl bg-[#030F26] border border-[#FFD700]/60 text-white text-xs font-bold"
                   >
-                    <option value="">-- Select Exam Center ({allCentersList.length} Available) --</option>
+                    <option value="">-- Select Target Center in {myRegion} ({myRegionalCenters.length} Assigned) --</option>
+                    <optgroup label={`⭐ ${myRegion} Region (${myRegionalCenters.length} Centers Monitored by your Squad)`}>
+                      {myRegionalCenters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — {c.code}
+                        </option>
+                      ))}
+                    </optgroup>
                     {Object.entries(centersGroupedByRegion)
+                      .filter(([region]) => region !== myRegion)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([region, centersInRegion]) => (
-                        <optgroup key={region} label={`${region} (${centersInRegion.length})`}>
+                        <optgroup key={region} label={`Other Region: ${region} (${centersInRegion.length})`}>
                           {centersInRegion.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name} — {c.code}

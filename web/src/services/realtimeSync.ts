@@ -13,6 +13,7 @@ import {
   WaecOffice,
   EscortRoute,
   DailyWorkRecord,
+  RegionalMonitoringSquad,
 } from '../types/sentinel';
 import { INITIAL_SEED_DATA, buildOfficialWaecAvatar } from './seedData';
 import {
@@ -23,8 +24,8 @@ import {
 import { dispatchTelegramSOS } from './sirenAndTelegram';
 import { computePinHash, generateDefaultDeviceId } from './authCrypto';
 
-const STORAGE_KEY = 'waec_sentinel_rtdb_state_v12';
-const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v12';
+const STORAGE_KEY = 'waec_sentinel_rtdb_state_v13';
+const OFFLINE_QUEUE_KEY = 'waec_sentinel_hive_offline_queue_v13';
 const CHANNEL_NAME = 'waec_sentinel_realtime_bus';
 
 export const HEARTBEAT_TIMEOUT_MS = 45000;
@@ -89,6 +90,8 @@ class RealtimeSyncEngine {
           parsed.telegram_dispatches = parsed.telegram_dispatches || {};
           parsed.daily_work_records =
             parsed.daily_work_records || INITIAL_SEED_DATA.daily_work_records || {};
+          parsed.regional_squads =
+            parsed.regional_squads || INITIAL_SEED_DATA.regional_squads || {};
           return parsed;
         }
       }
@@ -475,7 +478,20 @@ class RealtimeSyncEngine {
     const officer = this.state.officers[officerId];
     if (!officer) return null;
 
-    const targetCenterId = centerId || officer.assigned_center_id;
+    let targetCenterId = centerId || officer.assigned_center_id;
+    if (!targetCenterId && officer.assigned_region) {
+      const regCenters = this.getCentersForRegion(officer.assigned_region);
+      if (regCenters.length > 0) {
+        const curLoc = this.state.live_locations[officerId];
+        if (curLoc) {
+          const dict = regCenters.reduce<Record<string, ExamCenter>>((acc, c) => ({ ...acc, [c.id]: c }), {});
+          const { insideCenter, nearestCenter } = checkCenterGeofence(curLoc.lat, curLoc.lng, dict);
+          targetCenterId = (insideCenter || nearestCenter || regCenters[0]).id;
+        } else {
+          targetCenterId = regCenters[0].id;
+        }
+      }
+    }
     const center =
       (targetCenterId && this.state.centers[targetCenterId]) ||
       Object.values(this.state.centers)[0];
@@ -1879,6 +1895,105 @@ class RealtimeSyncEngine {
     this.commitState();
     const syncLatencyMs = Math.max(2, Math.round(performance.now() - t0));
     return { updatedDevices, droppedToHive, syncLatencyMs };
+  }
+
+
+  // =========================================================================
+  // REGIONAL MONITORING SQUADS (UNITS OF 4: 1 LEADER + 3 MEMBERS PER REGION)
+  // =========================================================================
+  public getRegionalSquads(): Record<string, RegionalMonitoringSquad> {
+    return this.state.regional_squads || {};
+  }
+
+  public getSquadForOfficer(officerId: string): RegionalMonitoringSquad | null {
+    const squads = this.state.regional_squads || {};
+    const officer = this.state.officers[officerId];
+    if (officer?.group_id && squads[officer.group_id]) {
+      return squads[officer.group_id];
+    }
+    for (const squad of Object.values(squads)) {
+      if (squad.leader_id === officerId || (squad.member_ids && squad.member_ids.includes(officerId))) {
+        return squad;
+      }
+    }
+    return null;
+  }
+
+  public getSquadMembers(squadId: string): {
+    leader: OfficerProfile | null;
+    members: OfficerProfile[];
+    all: OfficerProfile[];
+  } {
+    const squad = (this.state.regional_squads || {})[squadId];
+    if (!squad) {
+      return { leader: null, members: [], all: [] };
+    }
+    const leader = this.state.officers[squad.leader_id] || null;
+    const members = (squad.member_ids || [])
+      .map((id) => this.state.officers[id])
+      .filter((o): o is OfficerProfile => Boolean(o));
+    const all = leader ? [leader, ...members] : members;
+    return { leader, members, all };
+  }
+
+  public getCentersForRegion(region: string): ExamCenter[] {
+    const rLower = (region || '').toLowerCase().trim();
+    if (!rLower) return Object.values(this.state.centers);
+    return Object.values(this.state.centers).filter((c) => {
+      const zone = (c.zone || '').toLowerCase();
+      const desc = (c.description || '').toLowerCase();
+      return zone.includes(rLower) || desc.includes(rLower);
+    });
+  }
+
+  public assignOfficerToSquad(params: {
+    officerId: string;
+    squadId: string;
+    groupRole: 'Group Leader' | 'Group Member';
+  }) {
+    const officer = this.state.officers[params.officerId];
+    const squad = (this.state.regional_squads || {})[params.squadId];
+    if (!officer || !squad) return;
+
+    for (const sq of Object.values(this.state.regional_squads || {})) {
+      if (sq.leader_id === officer.id) {
+        sq.leader_id = '';
+      }
+      sq.member_ids = (sq.member_ids || []).filter((id) => id !== officer.id);
+    }
+
+    officer.group_id = squad.id;
+    officer.group_name = squad.name;
+    officer.group_role = params.groupRole;
+    officer.assigned_region = squad.region;
+    officer.assigned_zone = `${squad.name} (${squad.region})`;
+
+    if (params.groupRole === 'Group Leader') {
+      squad.leader_id = officer.id;
+    } else {
+      if (!squad.member_ids.includes(officer.id)) {
+        squad.member_ids.push(officer.id);
+      }
+    }
+
+    this.state.officers[officer.id] = { ...officer };
+    this.state.regional_squads![squad.id] = { ...squad };
+    this.commitState();
+  }
+
+  public assignSquadToRegion(squadId: string, region: string) {
+    const squad = (this.state.regional_squads || {})[squadId];
+    if (!squad) return;
+    squad.region = region;
+    this.state.regional_squads![squad.id] = { ...squad };
+
+    const { all } = this.getSquadMembers(squadId);
+    for (const officer of all) {
+      officer.assigned_region = region;
+      officer.assigned_zone = `${squad.name} (${region})`;
+      this.state.officers[officer.id] = { ...officer };
+    }
+    this.commitState();
   }
 
   public resetToSeedData() {

@@ -25,6 +25,19 @@ export type UserRole =
   | 'Head of Monitoring Team'
   | 'Field Monitoring Officer';
 
+export type GroupRole = 'Group Leader' | 'Group Member';
+
+export interface RegionalMonitoringSquad {
+  id: string;
+  name: string;
+  region: string;
+  leader_id: string;
+  member_ids: string[];
+  vehicle_badge?: string;
+  assigned_office_id?: string;
+  notes?: string;
+}
+
 export interface OfficerProfile {
   id: string;
   name: string;
@@ -34,6 +47,10 @@ export interface OfficerProfile {
   pin_hash: string;
   avatar_url?: string;
   staff_badge_no?: string;
+  group_id?: string;
+  group_name?: string;
+  group_role?: GroupRole;
+  assigned_region?: string;
   assigned_office_id?: string;
   assigned_zone: string;
   assigned_center_id: string;
@@ -233,4 +250,5 @@ export interface SentinelDatabaseSchema {
   incidents: Record<string, IncidentEvidence>;
   auth_audit_logs: Record<string, AuthAuditLog>;
   daily_work_records?: Record<string, DailyWorkRecord>;
+  regional_squads?: Record<string, RegionalMonitoringSquad>;
 }
